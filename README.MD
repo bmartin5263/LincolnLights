@@ -9,8 +9,9 @@
 - [X] Systems must be resilient to failure
 - [X] Programmable Startup Animation
 - [X] Multiple Scenes with ability to arbitrarily cycle between them
-- pX[ Use Vehicle Speed and Engine Speed for effects
 
 ## Phase 2 Goals
 
+- [ ] Smooth color changes when vehicle data changes abruptly
 - [ ] Use the Lincoln clock's existing buttons for cycling scenes
+- [ ] Multiple levels of brightness for different times of day
