@@ -19,14 +19,14 @@ namespace rgb {
 
 class RpmDisplay : public rgb::Scene {
 public:
-  explicit RpmDisplay(rgb::LEDRing& ring, rgb::Vehicle& vehicle);
+  explicit RpmDisplay(rgb::PixelList& ring, rgb::Vehicle& vehicle);
 
   auto setup() -> void override;
   auto update() -> void override;
   auto draw() -> void override;
 
 private:
-  rgb::LEDRing& ring;
+  rgb::PixelList& ring;
   rgb::Vehicle& vehicle;
   rgb::Timestamp lastPulseReset{0};
 public:

@@ -8,6 +8,7 @@
 #include "App.h"
 #include "AppBuilder.h"
 #include "VehicleThread.h"
+#include "LEDStrip.h"
 #include <ArduinoOTA.h> // idk why but without this compilation fails
 
 using namespace rgb;
@@ -15,23 +16,39 @@ using namespace rgb;
 static constexpr u16 LED_COUNT = 12;
 
 // Output
-auto ring = LEDCircuit<LED_COUNT>{D5};
+auto ring = LEDStrip<LED_COUNT>{D5};
 auto slice = ring.slice(9, 3);
 auto leds = std::array {
-  static_cast<Drawable*>(&ring)
+  static_cast<LEDCircuit*>(&ring)
 };
 
 // Scenes
 auto vehicle = Vehicle{};
 auto rpmDisplay = RpmDisplay{ring, vehicle};
 auto introScene = IntroScene{ring};
-auto trailingScene = TrailingScene { TrailingSceneParameters {
+auto comboGauge = TrailingScene { TrailingSceneParameters {
   .leds = &ring,
-  .colorGenerator = [](TrailingSceneColorGeneratorParameters params){
-    auto r = LerpClamp(1.0f, .75f, vehicle.rpm() - 600, 3500.0f);
-    auto g = 0.0f;
-    auto b = LerpClamp(0.0f, .25f, vehicle.rpm() - 600, 3500.0f);
-    return Color { r, g, b } * .05f;
+  .colorGenerator = [cancelEffectAt = rgb::Timestamp{}](TrailingSceneColorGeneratorParameters params) mutable {
+    auto rpm = vehicle.rpm();
+    if (rpm >= 3000.f || Clock::Now() < cancelEffectAt) {
+      if (cancelEffectAt == Timestamp{}) {
+        cancelEffectAt = Clock::Now() + Duration::Seconds(3);
+      }
+      auto speed = Duration::Milliseconds(2000);
+      auto time = rgb::Clock::Now().mod(speed).to<float>() / speed.to<float>();
+      auto myTime = time + (static_cast<float>(params.relativePosition) / params.length * .3f);
+      auto hue = rgb::LerpWrap(0.0f, 1.0f, myTime);
+      auto color  = rgb::Color::HslToRgb(hue);
+      return color * .085f;
+    }
+    else {
+      cancelEffectAt = rgb::Timestamp{};
+      auto r = EaseInOutCubic(LerpClamp(1.0f, 0.0f, rpm - 1000, 1500.0f));
+      auto g = 0.0f;
+      auto b = EaseInOutCubic(LerpClamp(0.0f, 1.0f, rpm - 1000, 1500.0f));
+      auto brightness = LerpClamp(.05f, .2f, rpm - 1500, 1000.0f);
+      return Color { r, g, b } * brightness;
+    }
   },
   .speed = Duration::Milliseconds(500),
   .shift = 6,
@@ -39,17 +56,45 @@ auto trailingScene = TrailingScene { TrailingSceneParameters {
   .endBuffer = 4,
   .continuous = true
 }};
-auto trailingScene2 = TrailingScene { TrailingSceneParameters {
+auto redGreenGauge = TrailingScene { TrailingSceneParameters {
+  .leds = &ring,
+  .colorGenerator = [cancelEffectAt = rgb::Timestamp{}](TrailingSceneColorGeneratorParameters params) mutable {
+    auto rpm = vehicle.rpm();
+    auto r = LerpClamp(0.0f, 1.0f, rpm - 1000, 1500.0f);
+    auto g = LerpClamp(1.0f, 0.0f, rpm - 1000, 1500.0f);
+    auto b = 0.0f;
+    auto brightness = LerpClamp(.05f, .2f, rpm - 1500, 1000.0f);
+    return Color { r, g, b } * brightness;
+  },
+  .speed = Duration::Milliseconds(500),
+  .shift = 6,
+  .length = 6,
+  .endBuffer = 4,
+  .continuous = true
+}};
+auto rainbowGauge = TrailingScene { TrailingSceneParameters {
+  .leds = &ring,
+  .colorGenerator = [cancelEffectAt = rgb::Timestamp{}](TrailingSceneColorGeneratorParameters params) mutable {
+    auto speed = Duration::Milliseconds(2000);
+    auto time = rgb::Clock::Now().mod(speed).to<float>() / speed.to<float>();
+    auto myTime = time + (static_cast<float>(params.relativePosition) / params.length * .3f);
+    auto hue = rgb::LerpWrap(0.0f, 1.0f, myTime);
+    auto color  = rgb::Color::HslToRgb(hue);
+    return color * .085f;
+  },
+  .speed = Duration::Milliseconds(500),
+  .shift = 6,
+  .length = 6,
+  .endBuffer = 4,
+  .continuous = true
+}};
+auto whiteGreenPulse = TrailingScene { TrailingSceneParameters {
   .leds = &ring,
   .colorGenerator = [](TrailingSceneColorGeneratorParameters params){
     auto rpm = vehicle.rpm();
-    auto r = LerpClamp(0.0f, 1.0f, rpm, 4000.0f);
-    auto g = LerpClamp(1.0f, 0.0f, rpm, 4000.0f);
-    auto b = 0.0f;
     auto brightness = LerpClamp(.02f, .03f, rpm, 4000.0f);
     auto x = Pulse(params.now.asSeconds(), 1.f);
     brightness += LerpClamp(0.f, .05f, x);
-
     return Color {1.0f - x, 1.0f, 1.0f - x} * brightness;
   },
   .speed = Duration::Milliseconds(500),
@@ -61,24 +106,22 @@ auto trailingScene2 = TrailingScene { TrailingSceneParameters {
 
 auto scenes = std::array {
   static_cast<Scene*>(&rpmDisplay),
-//  static_cast<Scene*>(&trailingScene),
-//  static_cast<Scene*>(&trailingScene2)
+  static_cast<Scene*>(&comboGauge),
+  static_cast<Scene*>(&redGreenGauge),
+  static_cast<Scene*>(&rainbowGauge),
+  static_cast<Scene*>(&whiteGreenPulse),
+  static_cast<Scene*>(&introScene)
 };
 
 // Input
-auto irReceiver = IRReceiver{D6};
+auto irReceiver = IRReceiver{};
 auto sensors = std::array {
-//  Runnable { []() {
-//    static auto lastVehicleUpdate = Timestamp{};
-//    if (Clock::Now().timeSince(lastVehicleUpdate) > config::VEHICLE_REFRESH_RATE) {
-//      vehicle.update();
-//      lastVehicleUpdate = Clock::Now();
-//    }
-//  }},
   Runnable { []() {
     irReceiver.update();
   }}
 };
+
+int offset = 1;
 
 auto setup() -> void {
   DebugScreen::Start();
@@ -88,7 +131,7 @@ auto setup() -> void {
   rpmDisplay.colorMode = RpmColorMode::SEGMENTED;
   rpmDisplay.glow = true;
 
-  ring.setOffset(11);
+  ring.setOffset(offset);
 
   irReceiver.button1.onPress([](){
     if (rpmDisplay.dimBrightness == 0) {
@@ -107,14 +150,57 @@ auto setup() -> void {
     }
   });
   irReceiver.button3.onPress([](){
-    rpmDisplay.dynamicRedLine = !rpmDisplay.dynamicRedLine;
+    rpmDisplay.bright = !rpmDisplay.bright;
+  });
+  irReceiver.button4.onPress([](){
+    if (rpmDisplay.layout == RpmLayout::TRADITIONAL) {
+      rpmDisplay.layout = RpmLayout::SPORT;
+    }
+    else {
+      rpmDisplay.layout = RpmLayout::TRADITIONAL;
+    }
+  });
+  irReceiver.button5.onPress([](){
+    if (rpmDisplay.greenColor == Color::GREEN(1.0f)) {
+      rpmDisplay.greenColor = Color::MAGENTA(1.0f);
+      rpmDisplay.yellowColor = Color::GREEN(1.0f);
+      rpmDisplay.redColor = Color::YELLOW(1.0f);
+    }
+    else {
+      rpmDisplay.greenColor = Color::GREEN(1.0f);
+      rpmDisplay.yellowColor = Color::YELLOW(1.0f);
+      rpmDisplay.redColor = Color::RED(1.0f);
+    }
+  });
+  irReceiver.button6.onPress([](){
+    if (rpmDisplay.yellowLineStart == 3000) {
+      rpmDisplay.yellowLineStart = 1800;
+      rpmDisplay.redLineStart = 3000;
+      rpmDisplay.limit = 5000;
+    }
+    else if (rpmDisplay.yellowLineStart == 1800) {
+      rpmDisplay.yellowLineStart = 3001;
+      rpmDisplay.redLineStart = 5000;
+      rpmDisplay.limit = 7000;
+    }
+    else {
+      rpmDisplay.yellowLineStart = 3000;
+      rpmDisplay.redLineStart = 4000;
+      rpmDisplay.limit = 4200;
+    }
+  });
+  irReceiver.buttonHash.onPress([](){
+    offset = (offset + 1) % LED_COUNT;
+    ring.setOffset(offset);
   });
   irReceiver.buttonStar.onPress([](){
     Debug::Recover();
   });
   irReceiver.buttonRight.onPress([](){ App::NextScene(); });
   irReceiver.buttonLeft.onPress([](){ App::PrevScene(); });
-  irReceiver.start();
+  irReceiver.buttonUp.onPress([](){ introScene.speed += Duration::Seconds(1); });
+  irReceiver.buttonDown.onPress([](){ introScene.speed -= Duration::Seconds(1); });
+  irReceiver.start(D3);
 
   log::init();
   AppBuilder::Create()
@@ -139,15 +225,15 @@ auto updateDisplay() -> void {
   DebugScreen::PrintLine(0, fpsStr);
   DebugScreen::PrintLine(1, rpmStr);
   DebugScreen::PrintLine(2, fuelStr);
-
-  auto r = "Reversed: " + std::to_string(ring.isReversed());
-  DebugScreen::PrintLine(3, r);
 }
 
 auto loop() -> void {
-  auto t = EaseOutCubic(vehicle.speed() / 140.0f);
-  trailingScene.params.speed = Duration::Milliseconds(LerpClamp(100, 4, t));
-  trailingScene2.params.speed = Duration::Milliseconds(LerpClamp(100, 4, t));
+  auto t = EaseOutCubic(vehicle.speed() / 160.0f);
+  auto m = LerpClamp(100, 4, t);
+  comboGauge.params.speed = Duration::Milliseconds(m);
+  whiteGreenPulse.params.speed = Duration::Milliseconds(m);
+  rainbowGauge.params.speed = Duration::Milliseconds(m);
+  redGreenGauge.params.speed = Duration::Milliseconds(m);
   if (DebugScreen::ReadyForUpdate()) {
     updateDisplay();
     DebugScreen::Display();

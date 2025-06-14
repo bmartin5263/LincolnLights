@@ -7,19 +7,19 @@
 
 #include "Scene.h"
 #include "Vehicle.h"
-#include "LEDChain.h"
+#include "PixelList.h"
 
 
 class SolidScene : public rgb::Scene {
 public:
 
-  explicit SolidScene(rgb::LEDChain& leds);
+  explicit SolidScene(rgb::PixelList& leds);
 
   auto update() -> void override;
   auto draw() -> void override;
 
 private:
-  rgb::LEDChain& leds;
+  rgb::PixelList& leds;
   rgb::Color color{rgb::Color::BLUE(.01)};
 
 };

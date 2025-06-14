@@ -4,7 +4,7 @@
 
 #include "SolidScene.h"
 
-SolidScene::SolidScene(rgb::LEDChain& leds): leds(leds) {
+SolidScene::SolidScene(rgb::PixelList& leds): leds(leds) {
 
 }
 

@@ -6,10 +6,11 @@
 #include "PushButton.h"
 #include "Clock.h"
 #include "DebugScreen.h"
+#include "PixelList.h"
 
 using namespace rgb;
 
-RpmDisplay::RpmDisplay(LEDRing& ring, Vehicle& vehicle): ring(ring), vehicle(vehicle) {
+RpmDisplay::RpmDisplay(PixelList& ring, Vehicle& vehicle): ring(ring), vehicle(vehicle) {
 
 }
 
@@ -81,8 +82,8 @@ auto RpmDisplay::draw() -> void {
   auto coolantPercent = RemapPercent(minCoolantLevel, maxCoolantLevel, coolantTemp);
   auto effectiveYellowLineStart = static_cast<u16>(yellowLineStart * LerpClamp(.6f, 1.0f, coolantPercent));
   auto effectiveRedLineStart = static_cast<u16>(redLineStart * LerpClamp(.8f, 1.0f, coolantPercent));
-  auto effectiveBrightBrightness = bright ? brightBrightness * 3 : brightBrightness;
-  auto effectiveDimBrightness = bright ? dimBrightness * 3 : dimBrightness;
+  auto effectiveBrightBrightness = bright ? brightBrightness * 4 : brightBrightness;
+  auto effectiveDimBrightness = bright ? dimBrightness * 4 : dimBrightness;
 
   auto ledCount = ring.getSize();
   auto levelCount = calculateLevels(ledCount, layout, shape);

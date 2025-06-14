@@ -9,7 +9,7 @@
 #include "Types.h"
 #include "Scene.h"
 #include "Vehicle.h"
-#include "LEDChain.h"
+#include "PixelList.h"
 
 struct TrailingSceneColorGeneratorParameters {
   rgb::Timestamp now;
@@ -25,7 +25,7 @@ constexpr auto defaultGenerator(const TrailingSceneColorGeneratorParameters&) ->
 }
 
 struct TrailingSceneParameters {
-  rgb::LEDChain* leds{nullptr};
+  rgb::PixelList* leds{nullptr};
   TrailingSceneColorGenerator colorGenerator{defaultGenerator};
   rgb::Color color{rgb::Color::RED(rgb::ByteToFloat(4))};
   rgb::Duration speed{rgb::Duration::Seconds(1)};
@@ -34,7 +34,7 @@ struct TrailingSceneParameters {
   int endBuffer{0};
   bool continuous{false};
 
-  auto LEDs() -> rgb::LEDChain& {
+  auto LEDs() -> rgb::PixelList& {
     return *leds;
   }
 };
