@@ -22,6 +22,8 @@ auto leds = std::array {
   static_cast<LEDCircuit*>(&ring)
 };
 
+u16 len = 6;
+
 // Scenes
 auto vehicle = Vehicle{};
 auto rpmDisplay = RpmDisplay{ring, vehicle};
@@ -31,6 +33,7 @@ auto comboGauge = TrailingScene { TrailingSceneParameters {
   .colorGenerator = [cancelEffectAt = rgb::Timestamp{}](TrailingSceneColorGeneratorParameters params) mutable {
     auto rpm = vehicle.rpm();
     if (rpm >= 3000.f || Clock::Now() < cancelEffectAt) {
+      len = 12;
       if (cancelEffectAt == Timestamp{}) {
         cancelEffectAt = Clock::Now() + Duration::Seconds(3);
       }
@@ -39,20 +42,24 @@ auto comboGauge = TrailingScene { TrailingSceneParameters {
       auto myTime = time + (static_cast<float>(params.relativePosition) / params.length * .3f);
       auto hue = rgb::LerpWrap(0.0f, 1.0f, myTime);
       auto color  = rgb::Color::HslToRgb(hue);
-      return color * .085f;
+      return color * .04f;
     }
     else {
+      len = 6;
       cancelEffectAt = rgb::Timestamp{};
       auto r = EaseInOutCubic(LerpClamp(1.0f, 0.0f, rpm - 1000, 1500.0f));
       auto g = 0.0f;
       auto b = EaseInOutCubic(LerpClamp(0.0f, 1.0f, rpm - 1000, 1500.0f));
-      auto brightness = LerpClamp(.05f, .2f, rpm - 1500, 1000.0f);
+      auto positionalBrightnessAdjust = LerpClamp(.5f, 1.0f, static_cast<float>(params.relativePosition) / params.length);
+//      auto positionalBrightnessAdjust = 1.0f;
+      auto brightness = LerpClamp(.05f, .18f, rpm - 1500, 1000.0f) * positionalBrightnessAdjust;
+
       return Color { r, g, b } * brightness;
     }
   },
   .speed = Duration::Milliseconds(500),
   .shift = 6,
-  .length = 6,
+  .length = len,
   .endBuffer = 4,
   .continuous = true
 }};
@@ -231,9 +238,10 @@ auto loop() -> void {
   auto t = EaseOutCubic(vehicle.speed() / 160.0f);
   auto m = LerpClamp(100, 4, t);
   comboGauge.params.speed = Duration::Milliseconds(m);
-  whiteGreenPulse.params.speed = Duration::Milliseconds(m);
-  rainbowGauge.params.speed = Duration::Milliseconds(m);
-  redGreenGauge.params.speed = Duration::Milliseconds(m);
+  comboGauge.params.length = len;
+//  whiteGreenPulse.params.speed = Duration::Milliseconds(m);
+//  rainbowGauge.params.speed = Duration::Milliseconds(m);
+//  redGreenGauge.params.speed = Duration::Milliseconds(m);
   if (DebugScreen::ReadyForUpdate()) {
     updateDisplay();
     DebugScreen::Display();
