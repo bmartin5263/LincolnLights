@@ -1,6 +1,6 @@
 #include <bitset>
 #include "Timer.h"
-#include "scene/RpmDisplay.h"
+#include "scene/RpmScene.h"
 #include "scene/TrailingScene.h"
 #include "DebugScreen.h"
 #include "scene/IntroScene.h"
@@ -26,12 +26,15 @@ u16 len = 6;
 
 // Scenes
 auto vehicle = Vehicle{};
-auto rpmDisplay = RpmDisplay{ring, vehicle};
+auto rpmScene = RpmScene{ring, vehicle};
 auto introScene = IntroScene{ring};
 auto comboGauge = TrailingScene { TrailingSceneParameters {
   .leds = &ring,
-  .colorGenerator = [cancelEffectAt = rgb::Timestamp{}](TrailingSceneColorGeneratorParameters params) mutable {
-    auto rpm = vehicle.rpm();
+  .colorGenerator = [cancelEffectAt = rgb::Timestamp{}, rpm = 1.0f](TrailingSceneColorGeneratorParameters params) mutable {
+    auto alpha = .001;
+    rpm = alpha * vehicle.rpm() + (1 - alpha) * rpm;
+    auto rpmStr = "RPM: " + std::to_string(static_cast<int>(rpm));
+    DebugScreen::PrintLine(3, rpmStr);
     if (rpm >= 3000.f || Clock::Now() < cancelEffectAt) {
       len = 12;
       if (cancelEffectAt == Timestamp{}) {
@@ -63,60 +66,10 @@ auto comboGauge = TrailingScene { TrailingSceneParameters {
   .endBuffer = 4,
   .continuous = true
 }};
-auto redGreenGauge = TrailingScene { TrailingSceneParameters {
-  .leds = &ring,
-  .colorGenerator = [cancelEffectAt = rgb::Timestamp{}](TrailingSceneColorGeneratorParameters params) mutable {
-    auto rpm = vehicle.rpm();
-    auto r = LerpClamp(0.0f, 1.0f, rpm - 1000, 1500.0f);
-    auto g = LerpClamp(1.0f, 0.0f, rpm - 1000, 1500.0f);
-    auto b = 0.0f;
-    auto brightness = LerpClamp(.05f, .2f, rpm - 1500, 1000.0f);
-    return Color { r, g, b } * brightness;
-  },
-  .speed = Duration::Milliseconds(500),
-  .shift = 6,
-  .length = 6,
-  .endBuffer = 4,
-  .continuous = true
-}};
-auto rainbowGauge = TrailingScene { TrailingSceneParameters {
-  .leds = &ring,
-  .colorGenerator = [cancelEffectAt = rgb::Timestamp{}](TrailingSceneColorGeneratorParameters params) mutable {
-    auto speed = Duration::Milliseconds(2000);
-    auto time = rgb::Clock::Now().mod(speed).to<float>() / speed.to<float>();
-    auto myTime = time + (static_cast<float>(params.relativePosition) / params.length * .3f);
-    auto hue = rgb::LerpWrap(0.0f, 1.0f, myTime);
-    auto color  = rgb::Color::HslToRgb(hue);
-    return color * .085f;
-  },
-  .speed = Duration::Milliseconds(500),
-  .shift = 6,
-  .length = 6,
-  .endBuffer = 4,
-  .continuous = true
-}};
-auto whiteGreenPulse = TrailingScene { TrailingSceneParameters {
-  .leds = &ring,
-  .colorGenerator = [](TrailingSceneColorGeneratorParameters params){
-    auto rpm = vehicle.rpm();
-    auto brightness = LerpClamp(.02f, .03f, rpm, 4000.0f);
-    auto x = Pulse(params.now.asSeconds(), 1.f);
-    brightness += LerpClamp(0.f, .05f, x);
-    return Color {1.0f - x, 1.0f, 1.0f - x} * brightness;
-  },
-  .speed = Duration::Milliseconds(500),
-  .shift = 6,
-  .length = 6,
-  .endBuffer = 4,
-  .continuous = true
-}};
 
 auto scenes = std::array {
-  static_cast<Scene*>(&rpmDisplay),
+  static_cast<Scene*>(&rpmScene),
   static_cast<Scene*>(&comboGauge),
-  static_cast<Scene*>(&redGreenGauge),
-  static_cast<Scene*>(&rainbowGauge),
-  static_cast<Scene*>(&whiteGreenPulse),
   static_cast<Scene*>(&introScene)
 };
 
@@ -132,68 +85,68 @@ int offset = 1;
 
 auto setup() -> void {
   DebugScreen::Start();
-  rpmDisplay.yellowLineStart = 3000;
-  rpmDisplay.redLineStart = 4000;
-  rpmDisplay.limit = 4200;
-  rpmDisplay.colorMode = RpmColorMode::SEGMENTED;
-  rpmDisplay.glow = true;
+  rpmScene.yellowLineStart = 3000;
+  rpmScene.redLineStart = 4000;
+  rpmScene.limit = 4200;
+  rpmScene.colorMode = RpmColorMode::SEGMENTED;
+  rpmScene.glow = true;
 
   ring.setOffset(offset);
 
   irReceiver.button1.onPress([](){
-    if (rpmDisplay.dimBrightness == 0) {
-      rpmDisplay.dimBrightness = 1;
+    if (rpmScene.dimBrightness == 0) {
+      rpmScene.dimBrightness = 1;
     }
     else {
-      rpmDisplay.dimBrightness = 0;
+      rpmScene.dimBrightness = 0;
     }
   });
   irReceiver.button2.onPress([](){
-    if (rpmDisplay.colorMode == RpmColorMode::SINGLE) {
-      rpmDisplay.colorMode = RpmColorMode::SEGMENTED;
+    if (rpmScene.colorMode == RpmColorMode::SINGLE) {
+      rpmScene.colorMode = RpmColorMode::SEGMENTED;
     }
     else {
-      rpmDisplay.colorMode = RpmColorMode::SINGLE;
+      rpmScene.colorMode = RpmColorMode::SINGLE;
     }
   });
   irReceiver.button3.onPress([](){
-    rpmDisplay.bright = !rpmDisplay.bright;
+    rpmScene.bright = !rpmScene.bright;
   });
   irReceiver.button4.onPress([](){
-    if (rpmDisplay.layout == RpmLayout::TRADITIONAL) {
-      rpmDisplay.layout = RpmLayout::SPORT;
+    if (rpmScene.layout == RpmLayout::TRADITIONAL) {
+      rpmScene.layout = RpmLayout::SPORT;
     }
     else {
-      rpmDisplay.layout = RpmLayout::TRADITIONAL;
+      rpmScene.layout = RpmLayout::TRADITIONAL;
     }
   });
   irReceiver.button5.onPress([](){
-    if (rpmDisplay.greenColor == Color::GREEN(1.0f)) {
-      rpmDisplay.greenColor = Color::MAGENTA(1.0f);
-      rpmDisplay.yellowColor = Color::GREEN(1.0f);
-      rpmDisplay.redColor = Color::YELLOW(1.0f);
+    if (rpmScene.greenColor == Color::GREEN(1.0f)) {
+      rpmScene.greenColor = Color::MAGENTA(1.0f);
+      rpmScene.yellowColor = Color::GREEN(1.0f);
+      rpmScene.redColor = Color::YELLOW(1.0f);
     }
     else {
-      rpmDisplay.greenColor = Color::GREEN(1.0f);
-      rpmDisplay.yellowColor = Color::YELLOW(1.0f);
-      rpmDisplay.redColor = Color::RED(1.0f);
+      rpmScene.greenColor = Color::GREEN(1.0f);
+      rpmScene.yellowColor = Color::YELLOW(1.0f);
+      rpmScene.redColor = Color::RED(1.0f);
     }
   });
   irReceiver.button6.onPress([](){
-    if (rpmDisplay.yellowLineStart == 3000) {
-      rpmDisplay.yellowLineStart = 1800;
-      rpmDisplay.redLineStart = 3000;
-      rpmDisplay.limit = 5000;
+    if (rpmScene.yellowLineStart == 3000) {
+      rpmScene.yellowLineStart = 1800;
+      rpmScene.redLineStart = 3000;
+      rpmScene.limit = 5000;
     }
-    else if (rpmDisplay.yellowLineStart == 1800) {
-      rpmDisplay.yellowLineStart = 3001;
-      rpmDisplay.redLineStart = 5000;
-      rpmDisplay.limit = 7000;
+    else if (rpmScene.yellowLineStart == 1800) {
+      rpmScene.yellowLineStart = 3001;
+      rpmScene.redLineStart = 5000;
+      rpmScene.limit = 7000;
     }
     else {
-      rpmDisplay.yellowLineStart = 3000;
-      rpmDisplay.redLineStart = 4000;
-      rpmDisplay.limit = 4200;
+      rpmScene.yellowLineStart = 3000;
+      rpmScene.redLineStart = 4000;
+      rpmScene.limit = 4200;
     }
   });
   irReceiver.buttonHash.onPress([](){

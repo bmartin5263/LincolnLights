@@ -17,9 +17,9 @@ namespace rgb {
   class PushButton;
 }
 
-class RpmDisplay : public rgb::Scene {
+class RpmScene : public rgb::Scene {
 public:
-  explicit RpmDisplay(rgb::PixelList& ring, rgb::Vehicle& vehicle);
+  explicit RpmScene(rgb::PixelList& ring, rgb::Vehicle& vehicle);
 
   auto setup() -> void override;
   auto update() -> void override;
@@ -44,6 +44,7 @@ public:
   uint limit{7000};
   rgb::u8 dimBrightness{1};
   rgb::u8 brightBrightness{4};
+  rgb::revs_per_minute rpm{0.0f};
   bool glow{true};
   bool bright{false};
   bool dynamicRedLine{true};

@@ -2,7 +2,7 @@
 // Created by Brandon on 2/21/25.
 //
 
-#include "RpmDisplay.h"
+#include "RpmScene.h"
 #include "PushButton.h"
 #include "Clock.h"
 #include "DebugScreen.h"
@@ -10,16 +10,16 @@
 
 using namespace rgb;
 
-RpmDisplay::RpmDisplay(PixelList& ring, Vehicle& vehicle): ring(ring), vehicle(vehicle) {
+RpmScene::RpmScene(PixelList& ring, Vehicle& vehicle): ring(ring), vehicle(vehicle) {
 
 }
 
-auto RpmDisplay::setup() -> void {
+auto RpmScene::setup() -> void {
   INFO("RPM setup");
   lastPulseReset = Clock::Now();
 }
 
-auto RpmDisplay::update() -> void {
+auto RpmScene::update() -> void {
 
 }
 
@@ -68,8 +68,8 @@ constexpr u16 calculateLevels(u16 ledSize, RpmLayout layout, RpmShape shape) {
   }
 }
 
-auto RpmDisplay::getCoolantTemp() -> float {
-  if (dynamicRedLine) {
+auto RpmScene::getCoolantTemp() -> float {
+  if (dynamicRedLine && vehicle.isConnected()) {
     return vehicle.coolantTemp();
   }
   else {
@@ -77,7 +77,7 @@ auto RpmDisplay::getCoolantTemp() -> float {
   }
 }
 
-auto RpmDisplay::draw() -> void {
+auto RpmScene::draw() -> void {
   auto coolantTemp = getCoolantTemp();
   auto coolantPercent = RemapPercent(minCoolantLevel, maxCoolantLevel, coolantTemp);
   auto effectiveYellowLineStart = static_cast<u16>(yellowLineStart * LerpClamp(.6f, 1.0f, coolantPercent));
@@ -90,8 +90,10 @@ auto RpmDisplay::draw() -> void {
   auto rpmPerLevel = limit / levelCount;
   auto yellowLevel = effectiveYellowLineStart / rpmPerLevel;
   auto redLevel = effectiveRedLineStart / rpmPerLevel;
-  auto rpmLevelAchieved = static_cast<uint>(vehicle.rpm() / rpmPerLevel);
-  if (rpmLevelAchieved == 0 && vehicle.rpm() > 100) {
+  auto alpha = .03;
+  rpm = alpha * vehicle.rpm() + (1 - alpha) * rpm;
+  auto rpmLevelAchieved = static_cast<uint>(rpm / rpmPerLevel);
+  if (rpmLevelAchieved == 0 && rpm > 100) {
     ++rpmLevelAchieved;
   }
   auto offset = calculateOffset(ledCount, layout, shape);
