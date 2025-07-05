@@ -13,11 +13,12 @@
 
 using namespace rgb;
 
-static constexpr u16 LED_COUNT = 12;
+static constexpr u16 LED_COUNT = LL_LED_COUNT;
+static constexpr RpmShape LED_SHAPE = LL_LED_SHAPE;
 
 // Output
-auto ring = LEDStrip<LED_COUNT>{D5};
-auto slice = ring.slice(9, 3);
+auto ring = LEDStrip<LED_COUNT>{D2_RGB};
+auto slice = LED_SHAPE == RpmShape::LINE ? ring.slice(3) : ring.slice(9, 3);
 auto leds = std::array {
   static_cast<LEDCircuit*>(&ring)
 };
@@ -30,7 +31,7 @@ auto rpmScene = RpmScene{ring, vehicle};
 auto introScene = IntroScene{ring};
 auto comboGauge = TrailingScene { TrailingSceneParameters {
   .leds = &ring,
-  .colorGenerator = [cancelEffectAt = rgb::Timestamp{}, rpm = 1.0f](TrailingSceneColorGeneratorParameters params) mutable {
+  .colorGenerator = [cancelEffectAt = rgb::Timestamp{}, rpm = vehicle.rpm()](TrailingSceneColorGeneratorParameters params) mutable {
     auto alpha = .001;
     rpm = alpha * vehicle.rpm() + (1 - alpha) * rpm;
     auto rpmStr = "RPM: " + std::to_string(static_cast<int>(rpm));
@@ -88,10 +89,12 @@ auto setup() -> void {
   rpmScene.yellowLineStart = 3000;
   rpmScene.redLineStart = 4000;
   rpmScene.limit = 4200;
-  rpmScene.colorMode = RpmColorMode::SEGMENTED;
+  rpmScene.colorMode = RpmColorMode::PARTITIONED();
   rpmScene.glow = true;
 
-  ring.setOffset(offset);
+  if (LED_SHAPE == RpmShape::CIRCLE) {
+    ring.setOffset(offset);
+  }
 
   irReceiver.button1.onPress([](){
     if (rpmScene.dimBrightness == 0) {
@@ -102,36 +105,36 @@ auto setup() -> void {
     }
   });
   irReceiver.button2.onPress([](){
-    if (rpmScene.colorMode == RpmColorMode::SINGLE) {
-      rpmScene.colorMode = RpmColorMode::SEGMENTED;
+    if (rpmScene.colorMode == RpmColorMode::SINGLE()) {
+      rpmScene.colorMode = RpmColorMode::PARTITIONED();
     }
     else {
-      rpmScene.colorMode = RpmColorMode::SINGLE;
+      rpmScene.colorMode = RpmColorMode::SINGLE();
     }
   });
   irReceiver.button3.onPress([](){
     rpmScene.bright = !rpmScene.bright;
   });
   irReceiver.button4.onPress([](){
-    if (rpmScene.layout == RpmLayout::TRADITIONAL) {
-      rpmScene.layout = RpmLayout::SPORT;
+    if (rpmScene.layout == RpmLayout::TRADITIONAL()) {
+      rpmScene.layout = RpmLayout::SPORT();
     }
     else {
-      rpmScene.layout = RpmLayout::TRADITIONAL;
+      rpmScene.layout = RpmLayout::TRADITIONAL();
     }
   });
-  irReceiver.button5.onPress([](){
-    if (rpmScene.greenColor == Color::GREEN(1.0f)) {
-      rpmScene.greenColor = Color::MAGENTA(1.0f);
-      rpmScene.yellowColor = Color::GREEN(1.0f);
-      rpmScene.redColor = Color::YELLOW(1.0f);
-    }
-    else {
-      rpmScene.greenColor = Color::GREEN(1.0f);
-      rpmScene.yellowColor = Color::YELLOW(1.0f);
-      rpmScene.redColor = Color::RED(1.0f);
-    }
-  });
+//  irReceiver.button5.onPress([](){
+//    if (rpmScene.greenColor == Color::GREEN(1.0f)) {
+//      rpmScene.greenColor = Color::MAGENTA(1.0f);
+//      rpmScene.yellowColor = Color::GREEN(1.0f);
+//      rpmScene.redColor = Color::YELLOW(1.0f);
+//    }
+//    else {
+//      rpmScene.greenColor = Color::GREEN(1.0f);
+//      rpmScene.yellowColor = Color::YELLOW(1.0f);
+//      rpmScene.redColor = Color::RED(1.0f);
+//    }
+//  });
   irReceiver.button6.onPress([](){
     if (rpmScene.yellowLineStart == 3000) {
       rpmScene.yellowLineStart = 1800;

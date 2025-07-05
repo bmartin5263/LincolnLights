@@ -7,68 +7,37 @@
 #include "Clock.h"
 #include "DebugScreen.h"
 #include "PixelList.h"
+#include "Timer.h"
 
 using namespace rgb;
 
-RpmScene::RpmScene(PixelList& ring, Vehicle& vehicle): ring(ring), vehicle(vehicle) {
+RpmScene::RpmScene(PixelList& pixels, Vehicle& vehicle): pixels(pixels), vehicle(vehicle) {
 
 }
 
 auto RpmScene::setup() -> void {
   INFO("RPM setup");
   lastPulseReset = Clock::Now();
+  connectedAt = Timestamp{};
+  if (enteredAt == Timestamp{}) {
+    enteredAt = Clock::Now();
+  }
 }
 
 auto RpmScene::update() -> void {
-
+  if (connectedAt == Timestamp{} && vehicle.isConnected()) {
+    connectedAt = Clock::Now();
+  }
+  else if (connectedAt != Timestamp{} && !vehicle.isConnected()) {
+    connectedAt = Timestamp{};
+  }
 }
 
 constexpr u16 mapToPixelPosition(int level, int ledCount, int offset = 0) {
   return (level + offset) % ledCount;
 }
 
-constexpr u16 calculateOffset(u16 ledSize, RpmLayout layout, RpmShape shape) {
-  if (shape == RpmShape::LINE) {
-    return 0;
-  }
-  else if (ledSize == 12) {
-    return layout == RpmLayout::TRADITIONAL ? 0 : 10;
-  }
-  else if (ledSize == 16) {
-    return layout == RpmLayout::TRADITIONAL ? 5 : 3;
-  }
-  else {
-    return 0;
-  }
-}
-
-
-constexpr u16 calculateLevels(u16 ledSize, RpmLayout layout, RpmShape shape) {
-  if (shape == RpmShape::LINE) {
-    return ledSize;
-  }
-  else if (ledSize == 12) {
-    if (layout == RpmLayout::SPORT) {
-      return 10;
-    }
-    else {
-      return 9;
-    }
-  }
-  else if (ledSize == 16) {
-    if (layout == RpmLayout::SPORT) {
-      return 13;
-    }
-    else {
-      return 13;
-    }
-  }
-  else {
-    return ledSize;
-  }
-}
-
-auto RpmScene::getCoolantTemp() -> float {
+auto RpmScene::getCoolantTemp() -> fahrenheit {
   if (dynamicRedLine && vehicle.isConnected()) {
     return vehicle.coolantTemp();
   }
@@ -77,92 +46,86 @@ auto RpmScene::getCoolantTemp() -> float {
   }
 }
 
-auto RpmScene::draw() -> void {
-  auto coolantTemp = getCoolantTemp();
-  auto coolantPercent = RemapPercent(minCoolantLevel, maxCoolantLevel, coolantTemp);
-  auto effectiveYellowLineStart = static_cast<u16>(yellowLineStart * LerpClamp(.6f, 1.0f, coolantPercent));
-  auto effectiveRedLineStart = static_cast<u16>(redLineStart * LerpClamp(.8f, 1.0f, coolantPercent));
-  auto effectiveBrightBrightness = bright ? brightBrightness * 4 : brightBrightness;
-  auto effectiveDimBrightness = bright ? dimBrightness * 4 : dimBrightness;
-
-  auto ledCount = ring.getSize();
-  auto levelCount = calculateLevels(ledCount, layout, shape);
-  auto rpmPerLevel = limit / levelCount;
-  auto yellowLevel = effectiveYellowLineStart / rpmPerLevel;
-  auto redLevel = effectiveRedLineStart / rpmPerLevel;
-  auto alpha = .03;
-  rpm = alpha * vehicle.rpm() + (1 - alpha) * rpm;
-  auto rpmLevelAchieved = static_cast<uint>(rpm / rpmPerLevel);
-  if (rpmLevelAchieved == 0 && rpm > 100) {
-    ++rpmLevelAchieved;
+auto RpmScene::calculateNextBrightness(const RpmGaugeCalculations& calculations) -> normal {
+  if (calculations.level < calculations.rpmLevelAchieved) {
+    if (calculations.glow && calculations.rpmLevelAchieved > calculations.yellowLevel) {
+      if (!lastFrameWasYellow) {
+        lastPulseReset = calculations.now - Duration::Milliseconds(500);
+      }
+      auto d = calculations.effectiveBrightBrightness;
+      auto b = calculations.effectiveBrightBrightness + 6;
+      auto brightness = Lerp(d, b, Pulse((calculations.now - lastPulseReset).asSeconds(), 1.5f));
+      lastFrameWasYellow = true;
+      return brightness;
+    }
+    else {
+      if (lastFrameWasYellow) {
+        auto d = calculations.effectiveBrightBrightness;
+        auto b = calculations.effectiveBrightBrightness + 6;
+        auto brightness = Lerp(d, b, Pulse((calculations.now - lastPulseReset).asSeconds(), 1.5f));
+        if (brightness <= calculations.effectiveBrightBrightness + 1) {
+          lastFrameWasYellow = false;
+        }
+        return brightness;
+      }
+      else {
+        return calculations.effectiveBrightBrightness;
+      }
+    }
   }
-  auto offset = calculateOffset(ledCount, layout, shape);
-  auto now = Clock::Now();
+  else {
+    return calculations.effectiveDimBrightness;
+  }
+}
 
+auto RpmScene::draw() -> void {
+  auto calcs = RpmGaugeCalculations();
+  calcs.now = Clock::Now();
+  calcs.coolantPercent = RemapPercent(minCoolantLevel, maxCoolantLevel, getCoolantTemp());
+  calcs.effectiveYellowLineStart = static_cast<u16>(yellowLineStart * LerpClamp(.6f, 1.0f, calcs.coolantPercent));
+  calcs.effectiveRedLineStart = static_cast<u16>(redLineStart * LerpClamp(.8f, 1.0f, calcs.coolantPercent));
+  calcs.effectiveBrightBrightness = bright ? brightBrightness * 4 : brightBrightness;
+  calcs.effectiveDimBrightness = bright ? dimBrightness * 4 : dimBrightness;
+
+  auto ledCount = pixels.getSize();
+  auto levelCount = shape == RpmShape::LINE ? ledCount : layout->calculateLevels(ledCount);
+  calcs.rpmPerLevel = limit / levelCount;
+  calcs.yellowLevel = calcs.effectiveYellowLineStart / calcs.rpmPerLevel;
+  calcs.redLevel = calcs.effectiveRedLineStart / calcs.rpmPerLevel;
+
+  rpm = RPM_SMOOTHING_FACTOR * vehicle.rpm() + (1 - RPM_SMOOTHING_FACTOR) * rpm;
+//  rpm = vehicle.rpm();
+  calcs.rpmLevelAchieved = static_cast<uint>(rpm / calcs.rpmPerLevel);
+  if (calcs.rpmLevelAchieved == 0 && rpm > 100) {
+    ++calcs.rpmLevelAchieved;
+  }
+
+  auto offset = shape == RpmShape::LINE ? 0 : layout->calculateOffset(ledCount);
   for (int level = 0; level < levelCount; ++level) {
-    auto minRpmToAchieveLevel = (rpmPerLevel * level) + rpmPerLevel;
-    float brightness;
-    if (level < rpmLevelAchieved) {
-      if (rpmLevelAchieved > yellowLevel && glow) {
-        if (!lastFrameWasYellow) {
-          lastPulseReset = now - Duration::Milliseconds(500);
-        }
-        auto d = ByteToFloat(effectiveBrightBrightness);
-        auto b = ByteToFloat(effectiveBrightBrightness + 6);
-        brightness = Lerp(d, b, Pulse((now - lastPulseReset).asSeconds(), 1.5f));
-        lastFrameWasYellow = true;
-      }
-      else {
-        if (lastFrameWasYellow) {
-          auto d = ByteToFloat(effectiveBrightBrightness);
-          auto b = ByteToFloat(effectiveBrightBrightness + 6);
-          brightness = Lerp(d, b, Pulse((now - lastPulseReset).asSeconds(), 1.5f));
-          if (brightness <= ByteToFloat(effectiveBrightBrightness + 1)) {
-            lastFrameWasYellow = false;
-          }
-        }
-        else {
-          brightness = ByteToFloat(effectiveBrightBrightness);
-        }
-      }
+    calcs.level = level;
+    auto color = colorMode->calculateColor(calcs, *this);
+
+    if (connectedAt == Timestamp{}) {
+      color = Color::WHITE();
+      calcs.rpmLevelAchieved = 100;
     }
     else {
-      brightness = ByteToFloat(effectiveDimBrightness);
+      auto begin = Clock::Now() - connectedAt;
+      auto end = Duration::Milliseconds(200);
+      auto x = static_cast<normal>(begin.value) / static_cast<normal>(end.value);
+      if (x < 1.0f) {
+        calcs.rpmLevelAchieved = 100;
+      }
+      color = Color::WHITE().lerpClamp(color, x);
     }
 
-    Color color;
-    if (colorMode == RpmColorMode::SEGMENTED) {
-      if (level < yellowLevel) {
-        color = greenColor * brightness;
-      }
-      else if (level < redLevel) {
-        color = yellowColor * brightness;
-      }
-      else {
-        color = redColor * brightness;
-      }
-    }
-    else if (colorMode == RpmColorMode::SMOOTH) {
-      if (minRpmToAchieveLevel <= effectiveYellowLineStart) {
-        color = greenColor.lerpClamp(yellowColor, static_cast<float>(minRpmToAchieveLevel) / static_cast<float>(effectiveYellowLineStart)) * brightness;
-      }
-      else {
-        color = yellowColor.lerpClamp(redColor, static_cast<float>(minRpmToAchieveLevel) / static_cast<float>(effectiveRedLineStart)) * brightness;
-      }
-    }
-    else {
-      if (rpmLevelAchieved < yellowLevel) {
-        color = greenColor * brightness;
-      }
-      else if (rpmLevelAchieved < redLevel) {
-        color = yellowColor * brightness;
-      }
-      else {
-        color = redColor * brightness;
-      }
-    }
+    auto begin = Clock::Now() - enteredAt;
+    auto end = Duration::Milliseconds(200);
+    auto x = static_cast<normal>(begin.value) / static_cast<normal>(end.value);
+    auto brightness = calculateNextBrightness(calcs);
+    brightness = rgb::LerpClamp(0.0f, brightness, x);
 
-
-    ring[mapToPixelPosition(level, ledCount, offset)] = color;
+    color *= brightness;
+    pixels[mapToPixelPosition(level, ledCount, offset)] = color;
   }
 }
