@@ -8,10 +8,12 @@
 #include "DebugScreen.h"
 #include "PixelList.h"
 #include "Timer.h"
+#include "LEDs.h"
+#include "BrightnessControl.h"
 
 using namespace rgb;
 
-RpmScene::RpmScene(PixelList& pixels, Vehicle& vehicle): pixels(pixels), vehicle(vehicle) {
+RpmScene::RpmScene(Vehicle& vehicle): vehicle(vehicle) {
 
 }
 
@@ -46,10 +48,15 @@ auto RpmScene::getCoolantTemp() -> fahrenheit {
   }
 }
 
-auto calculatePulseBrightness(const RpmGaugeCalculations& calculations, Timestamp lastPulseReset) -> normal {
-  auto min = calculations.effectiveBrightBrightness;
-  auto max = calculations.effectiveBrightBrightness * 3.0f;
-  return Lerp(min, max, Pulse((calculations.now - lastPulseReset).asSeconds(), 1.5f));
+auto calculatePulseBrightness(
+  normal brightness,
+  normal scale,
+  Timestamp now,
+  Timestamp lastPulseReset
+) -> normal {
+  auto min = brightness;
+  auto max = brightness * scale;
+  return Lerp(min, max, Pulse((now - lastPulseReset).asSeconds(), 1.5f));
 }
 
 auto RpmScene::calculateNextBrightness(const RpmGaugeCalculations& calculations) -> normal {
@@ -61,13 +68,13 @@ auto RpmScene::calculateNextBrightness(const RpmGaugeCalculations& calculations)
     if (!lastFrameWasYellow) {
       lastPulseReset = calculations.now - Duration::Milliseconds(500);
     }
-    auto brightness = calculatePulseBrightness(calculations, lastPulseReset);
+    auto brightness = calculatePulseBrightness(calculations.effectiveBrightBrightness, 3.0f, calculations.now, lastPulseReset);
     lastFrameWasYellow = true;
     return brightness;
   }
   else {
     if (lastFrameWasYellow) {
-      auto brightness = calculatePulseBrightness(calculations, lastPulseReset);
+      auto brightness = calculatePulseBrightness(calculations.effectiveBrightBrightness, 3.0f, calculations.now, lastPulseReset);
       if (brightness <= calculations.effectiveBrightBrightness + 1) {
         lastFrameWasYellow = false;
       }
@@ -91,17 +98,20 @@ auto RpmScene::draw() -> void {
   calcs.coolantPercent = RemapPercent(minCoolantLevel, maxCoolantLevel, getCoolantTemp());
   calcs.effectiveYellowLineStart = static_cast<u16>(yellowLineStart * LerpClamp(.6f, 1.0f, calcs.coolantPercent));
   calcs.effectiveRedLineStart = static_cast<u16>(redLineStart * LerpClamp(.8f, 1.0f, calcs.coolantPercent));
-  calcs.effectiveBrightBrightness = brightBrightness;
-  calcs.effectiveDimBrightness = dimBrightness;
+  calcs.effectiveBrightBrightness = BrightnessControl::GetBrightness(
+    rgb::ByteToFloat(1), rgb::ByteToFloat(4), rgb::ByteToFloat(8)
+  );
+  calcs.effectiveDimBrightness = BrightnessControl::GetBrightness(
+    rgb::ByteToFloat(4), rgb::ByteToFloat(16), rgb::ByteToFloat(32)
+  );
 
-  auto ledCount = pixels.getSize();
+  auto ledCount = ring.getSize();
   auto levelCount = shape == RpmShape::LINE ? ledCount : layout->calculateLevels(ledCount);
   calcs.rpmPerLevel = limit / levelCount;
   calcs.yellowLevel = calcs.effectiveYellowLineStart / calcs.rpmPerLevel;
   calcs.redLevel = calcs.effectiveRedLineStart / calcs.rpmPerLevel;
 
   rpm = RPM_SMOOTHING_FACTOR * vehicle.rpm() + (1 - RPM_SMOOTHING_FACTOR) * rpm;
-//  rpm = vehicle.rpm();
   calcs.rpmLevelAchieved = static_cast<uint>(rpm / calcs.rpmPerLevel);
   if (calcs.rpmLevelAchieved == 0 && rpm > 100) {
     ++calcs.rpmLevelAchieved;
@@ -130,6 +140,13 @@ auto RpmScene::draw() -> void {
     brightness = rgb::LerpClamp(0.0f, brightness, percent);
 
     color *= brightness;
-    pixels[mapToPixelPosition(level, ledCount, offset)] = color;
+    ring[mapToPixelPosition(level, ledCount, offset)] = color;
   }
+
+  auto stripBrightness = BrightnessControl::GetBrightness(.3f, .6f, .9f);
+  stripBrightness = calculatePulseBrightness(stripBrightness, 1.5f, calcs.now, lastPulseReset);
+  auto start = 1500.0f;
+  auto max = 2500.0f;
+  auto color = Color::GREEN().lerpWrap(Color::RED(), (rpm - start) / (max - start));
+  leftStrip.fill(color * stripBrightness);
 }

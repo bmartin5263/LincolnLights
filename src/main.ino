@@ -1,4 +1,5 @@
 #include <bitset>
+#include "BrightnessControl.h"
 #include "Timer.h"
 #include "scene/RpmScene.h"
 #include "scene/TrailingScene.h"
@@ -10,29 +11,34 @@
 #include "util/VehicleThread.h"
 #include "LEDStrip.h"
 #include "scene/SolidScene.h"
-#include "Brightness.h"
 #include <ArduinoOTA.h> // idk why but without this compilation fails
+#include "LEDs.h"
 
 using namespace rgb;
 
-static constexpr u16 LED_COUNT = LL_LED_COUNT;
-static constexpr RpmShape LED_SHAPE = LL_LED_SHAPE;
+LEDStrip<CLOCK_LED_COUNT> ring = LEDStrip<CLOCK_LED_COUNT>{D2_RGB};
 
-// Output
-auto ring = LEDStrip<LED_COUNT>{D2_RGB};
-auto strip = LEDStrip<40>{D4_RGB, NEO_GRB + NEO_KHZ800};
-auto slice = LED_SHAPE == RpmShape::LINE ? ring.slice(3) : ring.slice(9, 3);
-auto leds = std::array {
+LEDStrip<FOOT_STRIP_LED_COUNT> leftStrip = LEDStrip<FOOT_STRIP_LED_COUNT>{D4_RGB, NEO_GRB + NEO_KHZ800};
+PixelSlice leftFrontFoot = leftStrip.slice(HALF_FOOT_STRIP_LED_COUNT);
+PixelSlice leftBackFoot = leftStrip.slice(HALF_FOOT_STRIP_LED_COUNT, HALF_FOOT_STRIP_LED_COUNT);
+
+LEDStrip<FOOT_STRIP_LED_COUNT> rightStrip = rgb::LEDStrip<FOOT_STRIP_LED_COUNT>{0, NEO_GRB + NEO_KHZ800};
+PixelSlice rightFrontFoot = leftStrip.slice(HALF_FOOT_STRIP_LED_COUNT);
+PixelSlice rightBackFoot = leftStrip.slice(HALF_FOOT_STRIP_LED_COUNT, HALF_FOOT_STRIP_LED_COUNT);
+PixelSlice slice = CLOCK_LED_SHAPE == RpmShape::LINE ? ring.slice(3) : ring.slice(9, 3);
+
+std::array<rgb::LEDCircuit*, 3> leds = std::array {
   static_cast<LEDCircuit*>(&ring),
-  static_cast<LEDCircuit*>(&strip),
+  static_cast<LEDCircuit*>(&leftStrip),
+  static_cast<LEDCircuit*>(&rightStrip),
 };
 
 u16 len = 6;
 
 // Scenes
 auto vehicle = Vehicle{};
-auto rpmScene = RpmScene{ring, vehicle};
-auto introScene = IntroScene{ring, strip};
+auto rpmScene = RpmScene{vehicle};
+auto introScene = IntroScene{};
 auto solidScene = SolidScene{ring};
 auto comboGauge = TrailingScene { TrailingSceneParameters {
   .leds = &ring,
@@ -121,18 +127,18 @@ auto setup() -> void {
   rpmScene.colorMode = RpmColorMode::PARTITIONED();
   rpmScene.glow = true;
 
-  if (LED_SHAPE == RpmShape::CIRCLE) {
+  if (CLOCK_LED_SHAPE == RpmShape::CIRCLE) {
     ring.setOffset(offset);
   }
 
-  irReceiver.button1.onPress([](){
-    if (rpmScene.dimBrightness == 0) {
-      rpmScene.dimBrightness = ByteToFloat(1);
-    }
-    else {
-      rpmScene.dimBrightness = 0;
-    }
-  });
+//  irReceiver.button1.onPress([](){
+//    if (rpmScene.dimBrightness == 0) {
+//      rpmScene.dimBrightness = ByteToFloat(1);
+//    }
+//    else {
+//      rpmScene.dimBrightness = 0;
+//    }
+//  });
   irReceiver.button2.onPress([](){
     if (rpmScene.colorMode == RpmColorMode::SINGLE()) {
       rpmScene.colorMode = RpmColorMode::PARTITIONED();
@@ -178,19 +184,24 @@ auto setup() -> void {
       rpmScene.limit = 4200;
     }
   });
-  irReceiver.buttonHash.onPress([](){
-    offset = (offset + 1) % LED_COUNT;
-    ring.setOffset(offset);
-  });
   irReceiver.buttonStar.onPress([](){
     Debug::Recover();
   });
   irReceiver.buttonRight.onPress([](){ App::NextScene(); });
   irReceiver.buttonLeft.onPress([](){ App::PrevScene(); });
 
-  irReceiver.buttonUp.onPress([](){ Brightness::SetToMax(); });
-  irReceiver.buttonOk.onPress([](){ Brightness::SetToDefault(); });
-  irReceiver.buttonDown.onPress([](){ Brightness::SetToMin(); });
+  irReceiver.buttonUp.onPress([](){
+    Brightness::SetToMax();
+    BrightnessControl::IncreaseLevel();
+  });
+  irReceiver.buttonOk.onPress([](){
+    Brightness::SetToDefault();
+    BrightnessControl::SetLevel(BrightnessLevel::DIM);
+  });
+  irReceiver.buttonDown.onPress([](){
+    Brightness::SetToMin();
+    BrightnessControl::DecreaseLevel();
+  });
 
 
   irReceiver.button1.onPress([&](){

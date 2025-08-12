@@ -14,13 +14,9 @@
 #include "effect/RpmShape.h"
 #include "effect/RpmGaugeCalculations.h"
 
-namespace rgb {
-  class PushButton;
-}
-
 class RpmScene : public rgb::Scene {
 public:
-  explicit RpmScene(rgb::PixelList& pixels, rgb::Vehicle& vehicle);
+  explicit RpmScene(rgb::Vehicle& vehicle);
 
   auto setup() -> void override;
   auto update() -> void override;
@@ -29,7 +25,6 @@ public:
 private:
   static constexpr auto RPM_SMOOTHING_FACTOR = 0.03f;
 
-  rgb::PixelList& pixels;
   rgb::Vehicle& vehicle;
   rgb::Timestamp lastPulseReset{0};
   rgb::Timestamp connectedAt{};
@@ -43,8 +38,6 @@ public:
   const RpmLayout* layout{RpmLayout::TRADITIONAL()};
   const RpmColorMode* colorMode{RpmColorMode::PARTITIONED()};
   RpmShape shape{RpmShape::CIRCLE};
-  rgb::normal dimBrightness{rgb::ByteToFloat(1)};
-  rgb::normal brightBrightness{rgb::ByteToFloat(4)};
   rgb::revs_per_minute rpm{0.0f};
   rgb::u16 yellowLineStart{5500};
   rgb::u16 redLineStart{6500};

@@ -12,14 +12,18 @@
 
 class IntroScene : public rgb::Scene {
 public:
-  explicit IntroScene(rgb::PixelList& ring, rgb::PixelList& strip);
   auto setup() -> void override;
   auto update() -> void override;
   auto draw() -> void override;
   auto cleanup() -> void override;
 
-  rgb::PixelList& ring;
-  rgb::PixelList& strip;
+  IntroScene() = default;
+  IntroScene(const IntroScene& rhs) = default;
+  IntroScene(IntroScene&& rhs) noexcept = default;
+  IntroScene& operator=(const IntroScene& rhs) = default;
+  IntroScene& operator=(IntroScene&& rhs) noexcept = default;
+  ~IntroScene() override = default;
+
   rgb::TrailingEffect trailingEffect{};
   rgb::Duration speed{rgb::Duration::Seconds(1)};
   rgb::normal brightness{.03f};

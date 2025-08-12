@@ -4,14 +4,11 @@
 
 #include "IntroScene.h"
 #include "Clock.h"
-
-IntroScene::IntroScene(rgb::PixelList& ring, rgb::PixelList& strip) : ring(ring), strip(strip) {
-
-}
+#include "LEDs.h"
 
 auto IntroScene::setup() -> void {
   trailingEffect.offset = 4;
-  trailingEffect.trailRatio = 6.0f / 12;
+  trailingEffect.trailRatio = .5;
   trailingEffect.speed = rgb::Duration::Milliseconds(30);
 //  trailingEffect.cycles = 2;
   // Rainbow
@@ -37,7 +34,8 @@ auto IntroScene::draw() -> void {
   brightness = .03f;
   trailingEffect.draw(ring);
   brightness = .5f;
-  trailingEffect.draw(strip);
+  trailingEffect.draw(leftFrontFoot);
+  trailingEffect.draw(leftBackFoot);
 }
 
 auto IntroScene::cleanup() -> void {
