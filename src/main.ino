@@ -7,8 +7,10 @@
 #include "IRReceiver.h"
 #include "App.h"
 #include "AppBuilder.h"
-#include "VehicleThread.h"
+#include "util/VehicleThread.h"
 #include "LEDStrip.h"
+#include "scene/SolidScene.h"
+#include "Brightness.h"
 #include <ArduinoOTA.h> // idk why but without this compilation fails
 
 using namespace rgb;
@@ -18,9 +20,11 @@ static constexpr RpmShape LED_SHAPE = LL_LED_SHAPE;
 
 // Output
 auto ring = LEDStrip<LED_COUNT>{D2_RGB};
+auto strip = LEDStrip<40>{D4_RGB, NEO_GRB + NEO_KHZ800};
 auto slice = LED_SHAPE == RpmShape::LINE ? ring.slice(3) : ring.slice(9, 3);
 auto leds = std::array {
-  static_cast<LEDCircuit*>(&ring)
+  static_cast<LEDCircuit*>(&ring),
+  static_cast<LEDCircuit*>(&strip),
 };
 
 u16 len = 6;
@@ -28,35 +32,60 @@ u16 len = 6;
 // Scenes
 auto vehicle = Vehicle{};
 auto rpmScene = RpmScene{ring, vehicle};
-auto introScene = IntroScene{ring};
+auto introScene = IntroScene{ring, strip};
+auto solidScene = SolidScene{ring};
 auto comboGauge = TrailingScene { TrailingSceneParameters {
   .leds = &ring,
-  .colorGenerator = [cancelEffectAt = rgb::Timestamp{}, rpm = vehicle.rpm()](TrailingSceneColorGeneratorParameters params) mutable {
+  .colorGenerator = [
+    cancelEffectAt = Timestamp{},
+    averageRpm = vehicle.rpm(),
+    rainbowSpeed = 0.0f,
+    averageSpeed = vehicle.speed()
+  ](TrailingSceneColorGeneratorParameters params) mutable {
     auto alpha = .001;
-    rpm = alpha * vehicle.rpm() + (1 - alpha) * rpm;
-    auto rpmStr = "RPM: " + std::to_string(static_cast<int>(rpm));
-    DebugScreen::PrintLine(3, rpmStr);
-    if (rpm >= 3000.f || Clock::Now() < cancelEffectAt) {
+    auto currentRpm = vehicle.rpm();
+    auto currentSpeed = vehicle.speed();
+    averageRpm = alpha * currentRpm + (1 - alpha) * averageRpm;
+    averageSpeed = alpha * currentSpeed + (1 - alpha) * averageSpeed;
+    auto now = Clock::Now();
+
+    const auto RAINBOW_RPM_THRESHOLD = 3000.0f;
+    bool activateRainbowMode = currentRpm >= RAINBOW_RPM_THRESHOLD;
+    bool maintainRainbowMode = now < cancelEffectAt
+      || (rainbowSpeed != 0.0f && abs(currentSpeed - rainbowSpeed) < 15.0f);
+    if (activateRainbowMode || maintainRainbowMode) {
       len = 12;
-      if (cancelEffectAt == Timestamp{}) {
-        cancelEffectAt = Clock::Now() + Duration::Seconds(3);
+      if (activateRainbowMode) {
+        // Should be active for at least 3 seconds after reaching RPM threshold
+        cancelEffectAt = now + Duration::Seconds(3);
+        if (rainbowSpeed != 0.0f) {
+          rainbowSpeed = vehicle.speed();
+        }
       }
-      auto speed = Duration::Milliseconds(2000);
-      auto time = rgb::Clock::Now().mod(speed).to<float>() / speed.to<float>();
+
+      const auto SPEED = Duration::Seconds(2);
+      auto time = now.mod(SPEED).to<float>() / SPEED.to<float>();
       auto myTime = time + (static_cast<float>(params.relativePosition) / params.length * .3f);
-      auto hue = rgb::LerpWrap(0.0f, 1.0f, myTime);
-      auto color  = rgb::Color::HslToRgb(hue);
-      return color * .04f;
+      auto hue = LerpWrap(0.0f, 1.0f, myTime);
+      auto color  = Color::HslToRgb(hue);
+      return color * Brightness::Current();
     }
     else {
       len = 6;
-      cancelEffectAt = rgb::Timestamp{};
-      auto r = EaseInOutCubic(LerpClamp(1.0f, 0.0f, rpm - 1000, 1500.0f));
-      auto g = 0.0f;
-      auto b = EaseInOutCubic(LerpClamp(0.0f, 1.0f, rpm - 1000, 1500.0f));
+      cancelEffectAt = Timestamp{};
+      rainbowSpeed = 0.0f;
+//      auto r = EaseInOutCubic(LerpClamp(1.0f, 0.0f, averageRpm - 1000, 1500.0f));
+//      auto g = 0.0f;
+//      auto b = EaseInOutCubic(LerpClamp(0.0f, 1.0f, averageRpm - 1000, 1500.0f));
+
+      auto r = EaseInOutCubic(LerpClamp(1.0f, 0.0f, averageRpm - 500, 2000.0f));
+      auto g = EaseInOutCubic(LerpClamp(0.0f, 1.0f, averageRpm - 500, 2000.0f));
+      auto b = EaseInOutCubic(LerpClamp(1.0f, 0.0f, averageRpm - 500, 2000.0f));
+
+
       auto positionalBrightnessAdjust = LerpClamp(.5f, 1.0f, static_cast<float>(params.relativePosition) / params.length);
 //      auto positionalBrightnessAdjust = 1.0f;
-      auto brightness = LerpClamp(.05f, .18f, rpm - 1500, 1000.0f) * positionalBrightnessAdjust;
+      auto brightness = Brightness::Current() * positionalBrightnessAdjust;
 
       return Color { r, g, b } * brightness;
     }
@@ -85,7 +114,7 @@ auto sensors = std::array {
 int offset = 1;
 
 auto setup() -> void {
-  DebugScreen::Start();
+//  DebugScreen::Start();
   rpmScene.yellowLineStart = 3000;
   rpmScene.redLineStart = 4000;
   rpmScene.limit = 4200;
@@ -98,7 +127,7 @@ auto setup() -> void {
 
   irReceiver.button1.onPress([](){
     if (rpmScene.dimBrightness == 0) {
-      rpmScene.dimBrightness = 1;
+      rpmScene.dimBrightness = ByteToFloat(1);
     }
     else {
       rpmScene.dimBrightness = 0;
@@ -113,9 +142,6 @@ auto setup() -> void {
     }
   });
   irReceiver.button3.onPress([](){
-    rpmScene.bright = !rpmScene.bright;
-  });
-  irReceiver.button4.onPress([](){
     if (rpmScene.layout == RpmLayout::TRADITIONAL()) {
       rpmScene.layout = RpmLayout::SPORT();
     }
@@ -161,14 +187,50 @@ auto setup() -> void {
   });
   irReceiver.buttonRight.onPress([](){ App::NextScene(); });
   irReceiver.buttonLeft.onPress([](){ App::PrevScene(); });
-  irReceiver.buttonUp.onPress([](){ introScene.speed += Duration::Seconds(1); });
-  irReceiver.buttonDown.onPress([](){ introScene.speed -= Duration::Seconds(1); });
+
+  irReceiver.buttonUp.onPress([](){ Brightness::SetToMax(); });
+  irReceiver.buttonOk.onPress([](){ Brightness::SetToDefault(); });
+  irReceiver.buttonDown.onPress([](){ Brightness::SetToMin(); });
+
+
+  irReceiver.button1.onPress([&](){
+    solidScene.color.r = min(1.0f, solidScene.color.r + .1f);
+  });
+  irReceiver.button4.onPress([&](){
+    solidScene.color.r = Brightness::Current();
+  });
+  irReceiver.button7.onPress([&](){
+    solidScene.color.r = max(0.0f, solidScene.color.r - .1f);
+  });
+  irReceiver.button2.onPress([&](){
+    solidScene.color.g = min(1.0f, solidScene.color.g + .1f);
+  });
+  irReceiver.button5.onPress([&](){
+    solidScene.color.g = Brightness::Current();
+  });
+  irReceiver.button8.onPress([&](){
+    solidScene.color.g = max(0.0f, solidScene.color.g - .1f);
+  });
+  irReceiver.button3.onPress([&](){
+    solidScene.color.b = min(1.0f, solidScene.color.b + .1f);
+  });
+  irReceiver.button6.onPress([&](){
+    solidScene.color.b = Brightness::Current();
+  });
+  irReceiver.button9.onPress([&](){
+    solidScene.color.b = max(0.0f, solidScene.color.b - .1f);
+  });
+
   irReceiver.start(D3);
 
   log::init();
+  Brightness::Configure()
+    .DefaultBrightness(.05f)
+    .MaxBrightness(.15f)
+    .MinBrightness(ByteToFloat(1));
   AppBuilder::Create()
     .DebugOutputLED(&slice)
-    .EnableIntroScene(introScene, Duration::Seconds(1))
+    .EnableIntroScene(introScene, Duration::Seconds(10))
     .SetScenes(scenes)
     .SetLEDs(leds)
     .SetSensors(sensors)

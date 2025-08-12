@@ -18,9 +18,9 @@ public:
   auto update() -> void override;
   auto draw() -> void override;
 
+  rgb::Color color{rgb::Color::BLUE(.01)};
 private:
   rgb::PixelList& leds;
-  rgb::Color color{rgb::Color::BLUE(.01)};
 
 };
 

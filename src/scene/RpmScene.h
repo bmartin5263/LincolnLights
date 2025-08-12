@@ -32,26 +32,24 @@ private:
   rgb::PixelList& pixels;
   rgb::Vehicle& vehicle;
   rgb::Timestamp lastPulseReset{0};
-public:
-
   rgb::Timestamp connectedAt{};
   rgb::Timestamp enteredAt{};
-  rgb::Color greenColor{rgb::Color::GREEN(1.0f)};
-  rgb::Color yellowColor{rgb::Color::YELLOW(1.0f)};
-  rgb::Color redColor{rgb::Color::RED(1.0f)};
+public:
+  rgb::Color greenColor{rgb::Color::GREEN()};
+  rgb::Color yellowColor{rgb::Color::YELLOW()};
+  rgb::Color redColor{rgb::Color::RED()};
   rgb::fahrenheit minCoolantLevel{70.f};
   rgb::fahrenheit maxCoolantLevel{150.f};
   const RpmLayout* layout{RpmLayout::TRADITIONAL()};
   const RpmColorMode* colorMode{RpmColorMode::PARTITIONED()};
   RpmShape shape{RpmShape::CIRCLE};
-  uint yellowLineStart{5500};
-  uint redLineStart{6500};
-  uint limit{7000};
-  rgb::normal dimBrightness{1 / 255.0f};
-  rgb::normal brightBrightness{4 / 255.0f};
+  rgb::normal dimBrightness{rgb::ByteToFloat(1)};
+  rgb::normal brightBrightness{rgb::ByteToFloat(4)};
   rgb::revs_per_minute rpm{0.0f};
+  rgb::u16 yellowLineStart{5500};
+  rgb::u16 redLineStart{6500};
+  rgb::u16 limit{7000};
   bool glow{true};
-  bool bright{false};
   bool dynamicRedLine{true};
 
 private:
