@@ -11,45 +11,38 @@
 #include "Vehicle.h"
 #include "PixelList.h"
 
-struct TrailingSceneColorGeneratorParameters {
+struct TrailingSceneShaderParameters {
   rgb::Timestamp now;
   rgb::Duration speed;
   rgb::u16 length;
   rgb::u16 absolutePosition;
   rgb::u16 relativePosition;
+
+  [[nodiscard]]
+  auto positionRatio() const -> float {
+    return static_cast<float>(relativePosition) / static_cast<float>(length);
+  }
 };
 
-using TrailingSceneColorGenerator = std::function<rgb::Color(const TrailingSceneColorGeneratorParameters&)>;
-constexpr auto defaultGenerator(const TrailingSceneColorGeneratorParameters&) -> rgb::Color {
+using TrailingSceneShader = std::function<rgb::Color(const TrailingSceneShaderParameters&)>;
+constexpr auto DefaultShader(const TrailingSceneShaderParameters&) -> rgb::Color {
   return rgb::Color::CYAN(.01);
 }
 
-struct TrailingSceneParameters {
-  rgb::PixelList* leds{nullptr};
-  TrailingSceneColorGenerator colorGenerator{defaultGenerator};
-  rgb::Color color{rgb::Color::RED(rgb::ByteToFloat(4))};
+class TrailingScene : public rgb::Scene {
+public:
+  auto setup() -> void override;
+  auto update() -> void override;
+  auto draw() -> void override;
+
+  TrailingSceneShader shader{DefaultShader};
   rgb::Duration speed{rgb::Duration::Seconds(1)};
   int shift{0};
   rgb::u16 length{1};
   int endBuffer{0};
   bool continuous{false};
-
-  auto LEDs() -> rgb::PixelList& {
-    return *leds;
-  }
-};
-
-class TrailingScene : public rgb::Scene {
-public:
-  explicit TrailingScene(TrailingSceneParameters params);
-
-  auto setup() -> void override;
-  auto update() -> void override;
-  auto draw() -> void override;
-
-  TrailingSceneParameters params;
 private:
-  int pixel{0};
+  int position{0};
   rgb::Timestamp nextMoveTime{0};
 
   auto move() -> void;

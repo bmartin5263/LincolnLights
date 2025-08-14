@@ -241,7 +241,7 @@ auto setup() -> void {
     .MinBrightness(ByteToFloat(1));
   AppBuilder::Create()
     .DebugOutputLED(&slice)
-    .EnableIntroScene(introScene, Duration::Seconds(10))
+    .EnableIntroScene(introScene, Duration::Seconds(1))
     .SetScenes(scenes)
     .SetLEDs(leds)
     .SetSensors(sensors)

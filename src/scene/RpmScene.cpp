@@ -98,10 +98,10 @@ auto RpmScene::draw() -> void {
   calcs.coolantPercent = RemapPercent(minCoolantLevel, maxCoolantLevel, getCoolantTemp());
   calcs.effectiveYellowLineStart = static_cast<u16>(yellowLineStart * LerpClamp(.6f, 1.0f, calcs.coolantPercent));
   calcs.effectiveRedLineStart = static_cast<u16>(redLineStart * LerpClamp(.8f, 1.0f, calcs.coolantPercent));
-  calcs.effectiveBrightBrightness = BrightnessControl::GetBrightness(
+  calcs.effectiveDimBrightness = BrightnessControl::GetBrightness(
     rgb::ByteToFloat(1), rgb::ByteToFloat(4), rgb::ByteToFloat(8)
   );
-  calcs.effectiveDimBrightness = BrightnessControl::GetBrightness(
+  calcs.effectiveBrightBrightness = BrightnessControl::GetBrightness(
     rgb::ByteToFloat(4), rgb::ByteToFloat(16), rgb::ByteToFloat(32)
   );
 
@@ -116,6 +116,7 @@ auto RpmScene::draw() -> void {
   if (calcs.rpmLevelAchieved == 0 && rpm > 100) {
     ++calcs.rpmLevelAchieved;
   }
+  calcs.glow = calcs.rpmLevelAchieved > calcs.yellowLevel && !connectedAt.isZero();
 
   auto offset = shape == RpmShape::LINE ? 0 : layout->calculateOffset(ledCount);
   for (int level = 0; level < levelCount; ++level) {
@@ -134,7 +135,6 @@ auto RpmScene::draw() -> void {
       color = Color::WHITE(.8f).lerpClamp(color, percent);
     }
 
-    calcs.glow = calcs.rpmLevelAchieved > calcs.yellowLevel && !connectedAt.isZero();
     auto brightness = calculateNextBrightness(calcs);
     auto percent = calculateEffectPercent(enteredAt);
     brightness = rgb::LerpClamp(0.0f, brightness, percent);
@@ -143,10 +143,12 @@ auto RpmScene::draw() -> void {
     ring[mapToPixelPosition(level, ledCount, offset)] = color;
   }
 
-  auto stripBrightness = BrightnessControl::GetBrightness(.3f, .6f, .9f);
-  stripBrightness = calculatePulseBrightness(stripBrightness, 1.5f, calcs.now, lastPulseReset);
-  auto start = 1500.0f;
+  auto stripBrightness = BrightnessControl::GetBrightness(.6f, 1.0f, 1.0f);
+  if (calcs.glow) {
+    stripBrightness = calculatePulseBrightness(stripBrightness, 1.7f, calcs.now, lastPulseReset);
+  }
+  auto start = 1000.0f;
   auto max = 2500.0f;
-  auto color = Color::GREEN().lerpWrap(Color::RED(), (rpm - start) / (max - start));
+  auto color = Color::GREEN().lerpClamp(Color::RED(), (rpm - start) / (max - start));
   leftStrip.fill(color * stripBrightness);
 }
