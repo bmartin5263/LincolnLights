@@ -22,9 +22,10 @@ LEDStrip<FOOT_STRIP_LED_COUNT> leftStrip = LEDStrip<FOOT_STRIP_LED_COUNT>{D4_RGB
 PixelSlice leftFrontFoot = leftStrip.slice(HALF_FOOT_STRIP_LED_COUNT);
 PixelSlice leftBackFoot = leftStrip.slice(HALF_FOOT_STRIP_LED_COUNT, HALF_FOOT_STRIP_LED_COUNT);
 
-LEDStrip<FOOT_STRIP_LED_COUNT> rightStrip = rgb::LEDStrip<FOOT_STRIP_LED_COUNT>{0, NEO_GRB + NEO_KHZ800};
+LEDStrip<FOOT_STRIP_LED_COUNT> rightStrip = rgb::LEDStrip<FOOT_STRIP_LED_COUNT>{D5_RGB, NEO_GRB + NEO_KHZ800};
 PixelSlice rightFrontFoot = leftStrip.slice(HALF_FOOT_STRIP_LED_COUNT);
 PixelSlice rightBackFoot = leftStrip.slice(HALF_FOOT_STRIP_LED_COUNT, HALF_FOOT_STRIP_LED_COUNT);
+
 PixelSlice slice = CLOCK_LED_SHAPE == RpmShape::LINE ? ring.slice(3) : ring.slice(9, 3);
 
 std::array<rgb::LEDCircuit*, 3> leds = std::array {
@@ -78,20 +79,12 @@ auto comboGauge = TrailingScene { TrailingSceneParameters {
     }
     else {
       len = 6;
-      cancelEffectAt = Timestamp{};
-      rainbowSpeed = 0.0f;
-//      auto r = EaseInOutCubic(LerpClamp(1.0f, 0.0f, averageRpm - 1000, 1500.0f));
-//      auto g = 0.0f;
-//      auto b = EaseInOutCubic(LerpClamp(0.0f, 1.0f, averageRpm - 1000, 1500.0f));
-
-      auto r = EaseInOutCubic(LerpClamp(1.0f, 0.0f, averageRpm - 500, 2000.0f));
-      auto g = EaseInOutCubic(LerpClamp(0.0f, 1.0f, averageRpm - 500, 2000.0f));
-      auto b = EaseInOutCubic(LerpClamp(1.0f, 0.0f, averageRpm - 500, 2000.0f));
-
-
+      cancelEffectAt = rgb::Timestamp{};
+      auto r = EaseInOutCubic(LerpClamp(1.0f, 0.0f, averageRpm - 1000, 1500.0f));
+      auto g = 0.0f;
+      auto b = EaseInOutCubic(LerpClamp(0.0f, 1.0f, averageRpm - 1000, 1500.0f));
       auto positionalBrightnessAdjust = LerpClamp(.5f, 1.0f, static_cast<float>(params.relativePosition) / params.length);
-//      auto positionalBrightnessAdjust = 1.0f;
-      auto brightness = Brightness::Current() * positionalBrightnessAdjust;
+      auto brightness = LerpClamp(.05f, .18f, averageRpm - 1500, 1000.0f) * positionalBrightnessAdjust;
 
       return Color { r, g, b } * brightness;
     }
@@ -121,9 +114,9 @@ int offset = 1;
 
 auto setup() -> void {
 //  DebugScreen::Start();
-  rpmScene.yellowLineStart = 3000;
-  rpmScene.redLineStart = 4000;
-  rpmScene.limit = 4200;
+  rpmScene.yellowLineStart = 3000 * .8f;
+  rpmScene.redLineStart = 4000 * .8f;
+  rpmScene.limit = 4200 * .8f;
   rpmScene.colorMode = RpmColorMode::PARTITIONED();
   rpmScene.glow = true;
 
@@ -234,14 +227,13 @@ auto setup() -> void {
 
   irReceiver.start(D3);
 
-  log::init();
   Brightness::Configure()
     .DefaultBrightness(.05f)
     .MaxBrightness(.15f)
     .MinBrightness(ByteToFloat(1));
   AppBuilder::Create()
     .DebugOutputLED(&slice)
-    .EnableIntroScene(introScene, Duration::Seconds(1))
+    .EnableIntroScene(introScene, Duration::Milliseconds(1200))
     .SetScenes(scenes)
     .SetLEDs(leds)
     .SetSensors(sensors)

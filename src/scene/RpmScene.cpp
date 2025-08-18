@@ -5,9 +5,7 @@
 #include "RpmScene.h"
 #include "PushButton.h"
 #include "Clock.h"
-#include "DebugScreen.h"
 #include "PixelList.h"
-#include "Timer.h"
 #include "LEDs.h"
 #include "BrightnessControl.h"
 
@@ -99,10 +97,10 @@ auto RpmScene::draw() -> void {
   calcs.effectiveYellowLineStart = static_cast<u16>(yellowLineStart * LerpClamp(.6f, 1.0f, calcs.coolantPercent));
   calcs.effectiveRedLineStart = static_cast<u16>(redLineStart * LerpClamp(.8f, 1.0f, calcs.coolantPercent));
   calcs.effectiveDimBrightness = BrightnessControl::GetBrightness(
-    rgb::ByteToFloat(1), rgb::ByteToFloat(4), rgb::ByteToFloat(8)
+    rgb::ByteToFloat(1), rgb::ByteToFloat(8), rgb::ByteToFloat(16)
   );
   calcs.effectiveBrightBrightness = BrightnessControl::GetBrightness(
-    rgb::ByteToFloat(4), rgb::ByteToFloat(16), rgb::ByteToFloat(32)
+    rgb::ByteToFloat(5), rgb::ByteToFloat(16), rgb::ByteToFloat(32)
   );
 
   auto ledCount = ring.getSize();
@@ -143,12 +141,13 @@ auto RpmScene::draw() -> void {
     ring[mapToPixelPosition(level, ledCount, offset)] = color;
   }
 
-  auto stripBrightness = BrightnessControl::GetBrightness(.6f, 1.0f, 1.0f);
+  auto stripBrightness = BrightnessControl::GetBrightness(.8f, .8f, 1.0f);
   if (calcs.glow) {
-    stripBrightness = calculatePulseBrightness(stripBrightness, 1.7f, calcs.now, lastPulseReset);
+    stripBrightness = min(1.0f, calculatePulseBrightness(stripBrightness, 1.5f, calcs.now, lastPulseReset));
   }
-  auto start = 1000.0f;
+  auto start = 1500.0f;
   auto max = 2500.0f;
   auto color = Color::GREEN().lerpClamp(Color::RED(), (rpm - start) / (max - start));
   leftStrip.fill(color * stripBrightness);
+  rightStrip.fill(color * stripBrightness);
 }

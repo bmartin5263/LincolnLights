@@ -7,6 +7,7 @@
 
 #include "effect/RpmShape.h"
 #include "LEDStrip.h"
+#include "WebServer.h"
 
 static constexpr rgb::u16 CLOCK_LED_COUNT = LL_LED_COUNT;
 static constexpr RpmShape CLOCK_LED_SHAPE = LL_LED_SHAPE;
@@ -26,5 +27,7 @@ extern rgb::PixelSlice rightBackFoot;
 extern rgb::PixelSlice slice;
 
 extern std::array<rgb::LEDCircuit*, 3> leds;
+
+extern rgb::WebServerHandle webServerHandle;
 
 #endif //LINCOLNLIGHTS_PIXELS_H

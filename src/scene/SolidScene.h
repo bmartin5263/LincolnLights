@@ -8,6 +8,7 @@
 #include "Scene.h"
 #include "Vehicle.h"
 #include "PixelList.h"
+#include "WebServerFwd.h"
 
 
 class SolidScene : public rgb::Scene {
@@ -15,13 +16,15 @@ public:
 
   explicit SolidScene(rgb::PixelList& leds);
 
+  auto setup() -> void override;
+  auto cleanup() -> void override;
   auto update() -> void override;
   auto draw() -> void override;
 
   rgb::Color color{rgb::Color::BLUE(.01)};
 private:
   rgb::PixelList& leds;
-
+  rgb::WebServerHandle webServerHandle;
 };
 
 #endif //RGBLIB_SOLIDSCENE_H

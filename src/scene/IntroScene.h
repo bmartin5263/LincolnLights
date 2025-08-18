@@ -24,7 +24,8 @@ public:
   IntroScene& operator=(IntroScene&& rhs) noexcept = default;
   ~IntroScene() override = default;
 
-  rgb::TrailingEffect trailingEffect{};
+  rgb::TrailingEffect trailingEffect1{};
+  rgb::TrailingEffect trailingEffect2{};
   rgb::Duration speed{rgb::Duration::Seconds(1)};
   rgb::normal brightness{.03f};
 };
