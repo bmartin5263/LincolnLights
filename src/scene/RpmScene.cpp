@@ -52,8 +52,17 @@ auto calculatePulseBrightness(
   Timestamp now,
   Timestamp lastPulseReset
 ) -> normal {
-  auto min = brightness;
-  auto max = brightness * scale;
+  return Lerp(brightness, brightness * scale, Pulse((now - lastPulseReset).asSeconds(), 1.5f));
+}
+
+auto calculateInversePulseBrightness(
+  normal brightness,
+  normal scale,
+  Timestamp now,
+  Timestamp lastPulseReset
+) -> normal {
+  auto max = brightness;
+  auto min = brightness * scale;
   return Lerp(min, max, Pulse((now - lastPulseReset).asSeconds(), 1.5f));
 }
 
@@ -73,7 +82,7 @@ auto RpmScene::calculateNextBrightness(const RpmGaugeCalculations& calculations)
   else {
     if (lastFrameWasYellow) {
       auto brightness = calculatePulseBrightness(calculations.effectiveBrightBrightness, 3.0f, calculations.now, lastPulseReset);
-      if (brightness <= calculations.effectiveBrightBrightness + 1) {
+      if (brightness <= calculations.effectiveBrightBrightness * 1.16f) {
         lastFrameWasYellow = false;
       }
       return brightness;
@@ -97,10 +106,10 @@ auto RpmScene::draw() -> void {
   calcs.effectiveYellowLineStart = static_cast<u16>(yellowLineStart * LerpClamp(.6f, 1.0f, calcs.coolantPercent));
   calcs.effectiveRedLineStart = static_cast<u16>(redLineStart * LerpClamp(.8f, 1.0f, calcs.coolantPercent));
   calcs.effectiveDimBrightness = BrightnessControl::GetBrightness(
-    rgb::ByteToFloat(1), rgb::ByteToFloat(8), rgb::ByteToFloat(16)
+    rgb::ByteToFloat(1), rgb::ByteToFloat(4), rgb::ByteToFloat(8)
   );
   calcs.effectiveBrightBrightness = BrightnessControl::GetBrightness(
-    rgb::ByteToFloat(5), rgb::ByteToFloat(16), rgb::ByteToFloat(32)
+    rgb::ByteToFloat(6), rgb::ByteToFloat(16), rgb::ByteToFloat(32)
   );
 
   auto ledCount = ring.getSize();
@@ -109,7 +118,8 @@ auto RpmScene::draw() -> void {
   calcs.yellowLevel = calcs.effectiveYellowLineStart / calcs.rpmPerLevel;
   calcs.redLevel = calcs.effectiveRedLineStart / calcs.rpmPerLevel;
 
-  rpm = RPM_SMOOTHING_FACTOR * vehicle.rpm() + (1 - RPM_SMOOTHING_FACTOR) * rpm;
+  auto currentRpm = vehicle.rpm();
+  rpm = RPM_SMOOTHING_FACTOR * currentRpm + (1 - RPM_SMOOTHING_FACTOR) * rpm;
   calcs.rpmLevelAchieved = static_cast<uint>(rpm / calcs.rpmPerLevel);
   if (calcs.rpmLevelAchieved == 0 && rpm > 100) {
     ++calcs.rpmLevelAchieved;
@@ -121,8 +131,10 @@ auto RpmScene::draw() -> void {
     calcs.level = level;
     auto color = colorMode->calculateColor(calcs, *this);
 
+    // Handle the "not connected" effect, where if the OBD-II connection is not established
+    // then we default all the pixels to white
     if (connectedAt == Timestamp{}) {
-      color = Color::WHITE(.8f);
+      color = INACTIVE_COLOR;
       calcs.rpmLevelAchieved = 100;
     }
     else {
@@ -130,7 +142,7 @@ auto RpmScene::draw() -> void {
       if (percent < 1.0f) {
         calcs.rpmLevelAchieved = 100;
       }
-      color = Color::WHITE(.8f).lerpClamp(color, percent);
+      color = INACTIVE_COLOR.lerpClamp(color, percent);
     }
 
     auto brightness = calculateNextBrightness(calcs);
@@ -141,13 +153,26 @@ auto RpmScene::draw() -> void {
     ring[mapToPixelPosition(level, ledCount, offset)] = color;
   }
 
-  auto stripBrightness = BrightnessControl::GetBrightness(.8f, .8f, 1.0f);
-  if (calcs.glow) {
-    stripBrightness = min(1.0f, calculatePulseBrightness(stripBrightness, 1.5f, calcs.now, lastPulseReset));
+  auto stripBrightness = 1.0f;
+  if (currentRpm >= 3000.f || calcs.now < (rainbowedAt + Duration::Seconds(5))) {
+    if (currentRpm >= 3000.f) {
+      rainbowedAt = Clock::Now();
+    }
+    const auto SPEED = Duration::Seconds(1);
+    auto time = calcs.now.mod(SPEED).to<float>() / SPEED.to<float>();
+    auto hue = LerpWrap(0.0f, 1.0f, time);
+    auto color = Color::HslToRgb(hue);
+    leftStrip.fill(color * stripBrightness);
+    rightStrip.fill(color * stripBrightness);
   }
-  auto start = 1500.0f;
-  auto max = 2500.0f;
-  auto color = Color::GREEN().lerpClamp(Color::RED(), (rpm - start) / (max - start));
-  leftStrip.fill(color * stripBrightness);
-  rightStrip.fill(color * stripBrightness);
+  else {
+    if (calcs.glow) {
+      stripBrightness = min(1.0f, calculateInversePulseBrightness(1.0f, .6f, calcs.now, lastPulseReset));
+    }
+    auto start = 1500.0f;
+    auto max = 2500.0f;
+    auto color = Color::GREEN().lerpClamp(Color::RED(), (rpm - start) / (max - start));
+    leftStrip.fill(color * stripBrightness);
+    rightStrip.fill(color * stripBrightness);
+  }
 }

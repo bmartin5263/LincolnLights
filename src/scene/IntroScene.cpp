@@ -11,7 +11,8 @@ auto IntroScene::setup() -> void {
   trailingEffect1.offset = 4;
   trailingEffect1.trailRatio = .5;
   trailingEffect1.speed = rgb::Duration::Milliseconds(30);
-  trailingEffect1.cycles = 1;
+  trailingEffect1.cycles = 3;
+  trailingEffect1.endBuffer = 10;
   // Rainbow
 //  trailingEffect1.shader = [&](auto& led, auto& params) {
 //    auto time = rgb::Clock::Now().mod(speed).to<float>();
@@ -29,7 +30,7 @@ auto IntroScene::setup() -> void {
   trailingEffect2.offset = 0;
   trailingEffect2.trailRatio = .5;
   trailingEffect2.speed = rgb::Duration::Milliseconds(20);
-  trailingEffect2.cycles = 1;
+  trailingEffect2.cycles = 2;
   trailingEffect2.shader = [&](auto& led, auto& params) {
     auto ratio = params.positionRatio;
     led = rgb::Color::GREEN() * brightness * ratio;

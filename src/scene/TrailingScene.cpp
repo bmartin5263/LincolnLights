@@ -5,10 +5,7 @@
 #include "Assertions.h"
 #include "TrailingScene.h"
 #include "Clock.h"
-
-TrailingScene::TrailingScene(TrailingSceneParameters params): params(std::move(params)) {
-  ASSERT(params.leds != nullptr, "TrailingScene: LEDs is null");
-}
+#include "LEDs.h"
 
 auto TrailingScene::setup() -> void {
   nextMoveTime.value = 0;
@@ -19,47 +16,44 @@ auto TrailingScene::update() -> void {
   auto now = rgb::Clock::Now();
   if (now >= nextMoveTime) {
     move();
-    nextMoveTime = now + params.speed;
+    nextMoveTime = now + speed;
   }
 }
 
 auto TrailingScene::draw() -> void {
-  auto& leds = params.LEDs();
-  auto ledSize = leds.getSize();
-  auto length = params.length;
+  auto ledSize = ring.getSize();
   auto now = rgb::Clock::Now();
 
-  auto colorGeneratorParameters = TrailingSceneColorGeneratorParameters {
+  auto shaderParameters = ShaderParameters {
     .now = now,
-    .speed = params.speed,
+    .speed = speed,
     .length = length
   };
-  if (params.continuous) {
+  if (continuous) {
     for (int i = 0; i < length; ++i) {
-      auto led = (pixel + i + params.shift) % ledSize;
-      colorGeneratorParameters.relativePosition = i;
-      colorGeneratorParameters.absolutePosition = led;
-      leds[led] = params.colorGenerator(colorGeneratorParameters);
+      auto led = (pixel + i + shift) % ledSize;
+      shaderParameters.relativePosition = i;
+      shaderParameters.absolutePosition = led;
+      ring[led] = shader(shaderParameters);
     }
   }
   else {
     for (int i = 0; i < length; ++i) {
       auto led = (pixel + i + 1) - ((rgb::i32) length);
       if (led >= 0 && led < ledSize + 1) {
-        led = (led + params.shift) % ledSize;
-        colorGeneratorParameters.relativePosition = i;
-        colorGeneratorParameters.absolutePosition = led;
-        leds[led] = params.colorGenerator(colorGeneratorParameters);
+        led = (led + shift) % ledSize;
+        shaderParameters.relativePosition = i;
+        shaderParameters.absolutePosition = led;
+        ring[led] = shader(shaderParameters);
       }
     }
   }
 }
 
 auto TrailingScene::move() -> void {
-  auto& leds = params.LEDs();
-  auto ledSize = leds.getSize();
+  auto ledSize = ring.getSize();
   pixel += 1;
-  if (pixel >= ledSize + (params.continuous ? 0 : params.length + params.endBuffer)) {
+  if (pixel >= ledSize + (continuous ? 0 : length + endBuffer)) {
     pixel = 0;
   }
 }

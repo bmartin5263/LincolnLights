@@ -41,14 +41,42 @@ auto vehicle = Vehicle{};
 auto rpmScene = RpmScene{vehicle};
 auto introScene = IntroScene{};
 auto solidScene = SolidScene{ring};
-auto comboGauge = TrailingScene { TrailingSceneParameters {
-  .leds = &ring,
-  .colorGenerator = [
+auto comboScene = TrailingScene{};
+
+auto scenes = std::array {
+  static_cast<Scene*>(&rpmScene),
+  static_cast<Scene*>(&comboScene),
+  static_cast<Scene*>(&introScene)
+};
+
+// Input
+auto irReceiver = IRReceiver{};
+auto sensors = std::array {
+  Runnable { []() {
+    irReceiver.update();
+  }}
+};
+
+int offset = 1;
+
+auto setup() -> void {
+//  DebugScreen::Start();
+  rpmScene.yellowLineStart = 3000 * .8f;
+  rpmScene.redLineStart = 4000 * .8f;
+  rpmScene.limit = 4200 * .8f;
+  rpmScene.colorMode = RpmColorMode::PARTITIONED();
+  rpmScene.glow = true;
+
+  comboScene.speed = Duration::Milliseconds(500);
+  comboScene.shift = 6;
+  comboScene.length = len;
+  comboScene.continuous = true;
+  comboScene.shader = [
     cancelEffectAt = Timestamp{},
     averageRpm = vehicle.rpm(),
     rainbowSpeed = 0.0f,
     averageSpeed = vehicle.speed()
-  ](TrailingSceneColorGeneratorParameters params) mutable {
+  ](const TrailingScene::ShaderParameters& params) mutable {
     auto alpha = .001;
     auto currentRpm = vehicle.rpm();
     auto currentSpeed = vehicle.speed();
@@ -59,7 +87,7 @@ auto comboGauge = TrailingScene { TrailingSceneParameters {
     const auto RAINBOW_RPM_THRESHOLD = 3000.0f;
     bool activateRainbowMode = currentRpm >= RAINBOW_RPM_THRESHOLD;
     bool maintainRainbowMode = now < cancelEffectAt
-      || (rainbowSpeed != 0.0f && abs(currentSpeed - rainbowSpeed) < 15.0f);
+                               || (rainbowSpeed != 0.0f && abs(currentSpeed - rainbowSpeed) < 15.0f);
     if (activateRainbowMode || maintainRainbowMode) {
       len = 12;
       if (activateRainbowMode) {
@@ -88,37 +116,7 @@ auto comboGauge = TrailingScene { TrailingSceneParameters {
 
       return Color { r, g, b } * brightness;
     }
-  },
-  .speed = Duration::Milliseconds(500),
-  .shift = 6,
-  .length = len,
-  .endBuffer = 4,
-  .continuous = true
-}};
-
-auto scenes = std::array {
-  static_cast<Scene*>(&rpmScene),
-  static_cast<Scene*>(&comboGauge),
-  static_cast<Scene*>(&introScene)
-};
-
-// Input
-auto irReceiver = IRReceiver{};
-auto sensors = std::array {
-  Runnable { []() {
-    irReceiver.update();
-  }}
-};
-
-int offset = 1;
-
-auto setup() -> void {
-//  DebugScreen::Start();
-  rpmScene.yellowLineStart = 3000 * .8f;
-  rpmScene.redLineStart = 4000 * .8f;
-  rpmScene.limit = 4200 * .8f;
-  rpmScene.colorMode = RpmColorMode::PARTITIONED();
-  rpmScene.glow = true;
+  };
 
   if (CLOCK_LED_SHAPE == RpmShape::CIRCLE) {
     ring.setOffset(offset);
@@ -233,7 +231,7 @@ auto setup() -> void {
     .MinBrightness(ByteToFloat(1));
   AppBuilder::Create()
     .DebugOutputLED(&slice)
-    .EnableIntroScene(introScene, Duration::Milliseconds(1200))
+    .EnableIntroScene(introScene, Duration::Milliseconds(2000))
     .SetScenes(scenes)
     .SetLEDs(leds)
     .SetSensors(sensors)
@@ -258,8 +256,8 @@ auto updateDisplay() -> void {
 auto loop() -> void {
   auto t = EaseOutCubic(vehicle.speed() / 160.0f);
   auto m = LerpClamp(100, 4, t);
-  comboGauge.params.speed = Duration::Milliseconds(m);
-  comboGauge.params.length = len;
+  comboScene.speed = Duration::Milliseconds(m);
+  comboScene.length = len;
 //  whiteGreenPulse.params.speed = Duration::Milliseconds(m);
 //  rainbowGauge.params.speed = Duration::Milliseconds(m);
 //  redGreenGauge.params.speed = Duration::Milliseconds(m);

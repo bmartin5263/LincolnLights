@@ -15,6 +15,8 @@
 #include "effect/RpmGaugeCalculations.h"
 
 class RpmScene : public rgb::Scene {
+  using Color = rgb::Color;
+
 public:
   explicit RpmScene(rgb::Vehicle& vehicle);
 
@@ -24,15 +26,17 @@ public:
 
 private:
   static constexpr auto RPM_SMOOTHING_FACTOR = 0.03f;
+  static constexpr auto INACTIVE_COLOR = Color::WHITE(.8);
 
   rgb::Vehicle& vehicle;
-  rgb::Timestamp lastPulseReset{0};
+  rgb::Timestamp lastPulseReset{};
   rgb::Timestamp connectedAt{};
   rgb::Timestamp enteredAt{};
+  rgb::Timestamp rainbowedAt{};
 public:
-  rgb::Color greenColor{rgb::Color::GREEN()};
-  rgb::Color yellowColor{rgb::Color::YELLOW()};
-  rgb::Color redColor{rgb::Color::RED()};
+  Color greenColor{Color::GREEN()};
+  Color yellowColor{Color::YELLOW()};
+  Color redColor{Color::RED()};
   rgb::fahrenheit minCoolantLevel{70.f};
   rgb::fahrenheit maxCoolantLevel{150.f};
   const RpmLayout* layout{RpmLayout::TRADITIONAL()};
