@@ -13,6 +13,7 @@
 #include "effect/RpmColorMode.h"
 #include "effect/RpmShape.h"
 #include "effect/RpmGaugeCalculations.h"
+#include "Timer.h"
 
 class RpmScene : public rgb::Scene {
   using Color = rgb::Color;
@@ -33,6 +34,9 @@ private:
   rgb::Timestamp connectedAt{};
   rgb::Timestamp enteredAt{};
   rgb::Timestamp rainbowedAt{};
+  rgb::TimerHandle activationAnimationHandle{};
+  uint footLevel{0};
+  bool inAnimation{false};
 public:
   Color greenColor{Color::GREEN()};
   Color yellowColor{Color::YELLOW()};

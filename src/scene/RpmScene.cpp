@@ -106,10 +106,10 @@ auto RpmScene::draw() -> void {
   calcs.effectiveYellowLineStart = static_cast<u16>(yellowLineStart * LerpClamp(.6f, 1.0f, calcs.coolantPercent));
   calcs.effectiveRedLineStart = static_cast<u16>(redLineStart * LerpClamp(.8f, 1.0f, calcs.coolantPercent));
   calcs.effectiveDimBrightness = BrightnessControl::GetBrightness(
-    rgb::ByteToFloat(1), rgb::ByteToFloat(4), rgb::ByteToFloat(8)
+    rgb::ByteToFloat(1), rgb::ByteToFloat(2), rgb::ByteToFloat(4)
   );
   calcs.effectiveBrightBrightness = BrightnessControl::GetBrightness(
-    rgb::ByteToFloat(6), rgb::ByteToFloat(16), rgb::ByteToFloat(32)
+    rgb::ByteToFloat(6), rgb::ByteToFloat(20), rgb::ByteToFloat(40)
   );
 
   auto ledCount = ring.getSize();
@@ -153,26 +153,59 @@ auto RpmScene::draw() -> void {
     ring[mapToPixelPosition(level, ledCount, offset)] = color;
   }
 
-  auto stripBrightness = 1.0f;
-  if (currentRpm >= 3000.f || calcs.now < (rainbowedAt + Duration::Seconds(5))) {
-    if (currentRpm >= 3000.f) {
-      rainbowedAt = Clock::Now();
-    }
-    const auto SPEED = Duration::Seconds(1);
-    auto time = calcs.now.mod(SPEED).to<float>() / SPEED.to<float>();
-    auto hue = LerpWrap(0.0f, 1.0f, time);
-    auto color = Color::HslToRgb(hue);
-    leftStrip.fill(color * stripBrightness);
-    rightStrip.fill(color * stripBrightness);
+  auto currentSpeed = static_cast<float>(vehicle.speed());
+  rpm = (RPM_SMOOTHING_FACTOR * currentRpm + (1 - RPM_SMOOTHING_FACTOR) * rpm);
+//  rpmSuperSmooth = RPM_SUPER_SMOOTHING_FACTOR * currentRpm + (1 - RPM_SUPER_SMOOTHING_FACTOR) * rpmSuperSmooth;
+
+  if (rpm >= 900 && footLevel < leftStrip.getSize() && !inAnimation) {
+    inAnimation = true;
+    activationAnimationHandle = Timer::SetImmediateTimeout([&](auto& context){
+      ++footLevel;
+      if (footLevel < leftStrip.getSize()) {
+        context.repeatIn = Duration::Milliseconds(15);
+      }
+      else {
+        inAnimation = false;
+      }
+    });
   }
-  else {
-    if (calcs.glow) {
-      stripBrightness = min(1.0f, calculateInversePulseBrightness(1.0f, .6f, calcs.now, lastPulseReset));
+  else if (currentSpeed <= 0.0f && footLevel > 0 && !inAnimation) {
+    inAnimation = true;
+    activationAnimationHandle = Timer::SetImmediateTimeout([&](auto& context){
+      --footLevel;
+      if (footLevel > 0) {
+        context.repeatIn = Duration::Milliseconds(20);
+      }
+      else {
+        inAnimation = false;
+      }
+    });
+  }
+
+  leftFrontFoot.fill(Color(.8f, 0, 1.0f));
+  rightFrontFoot.fill(Color(.8f, 0, 1.0f));
+
+  leftBackFoot.fill(Color(.8f, 0, 1.0f));
+  rightBackFoot.fill(Color(.8f, 0, 1.0f));
+
+  if (footLevel > 0) {
+    Color rpmColor;
+    if (currentRpm >= 3000.0f || calcs.now < (rainbowedAt + Duration::Seconds(5))) {
+      if (currentRpm >= 3000.0f) {
+        rainbowedAt = Clock::Now();
+      }
+      const auto SPEED = Duration::Milliseconds(500);
+      auto time = calcs.now.mod(SPEED).to<float>() / SPEED.to<float>();
+      auto hue = LerpWrap(0.0f, 1.0f, time);
+      rpmColor = Color::HslToRgb(hue);
     }
-    auto start = 1500.0f;
-    auto max = 2500.0f;
-    auto color = Color::GREEN().lerpClamp(Color::RED(), (rpm - start) / (max - start));
-    leftStrip.fill(color * stripBrightness);
-    rightStrip.fill(color * stripBrightness);
+    else {
+      auto start = 1500.0f;
+      auto max = 2500.0f;
+      auto time = (rpm - start) / (max - start);
+      rpmColor = Color(0.0f, 1.0f, 1.0f).lerpClamp(Color(1.0f, 0, .4f), time);
+    }
+    leftStrip.fill(rpmColor, footLevel);
+    rightStrip.fill(rpmColor, footLevel);
   }
 }

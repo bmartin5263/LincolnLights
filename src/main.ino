@@ -23,8 +23,8 @@ PixelSlice leftFrontFoot = leftStrip.slice(HALF_FOOT_STRIP_LED_COUNT);
 PixelSlice leftBackFoot = leftStrip.slice(HALF_FOOT_STRIP_LED_COUNT, HALF_FOOT_STRIP_LED_COUNT);
 
 LEDStrip<FOOT_STRIP_LED_COUNT> rightStrip = rgb::LEDStrip<FOOT_STRIP_LED_COUNT>{D5_RGB, NEO_GRB + NEO_KHZ800};
-PixelSlice rightFrontFoot = leftStrip.slice(HALF_FOOT_STRIP_LED_COUNT);
-PixelSlice rightBackFoot = leftStrip.slice(HALF_FOOT_STRIP_LED_COUNT, HALF_FOOT_STRIP_LED_COUNT);
+PixelSlice rightFrontFoot = rightStrip.slice(HALF_FOOT_STRIP_LED_COUNT);
+PixelSlice rightBackFoot = rightStrip.slice(HALF_FOOT_STRIP_LED_COUNT, HALF_FOOT_STRIP_LED_COUNT);
 
 PixelSlice slice = CLOCK_LED_SHAPE == RpmShape::LINE ? ring.slice(3) : ring.slice(9, 3);
 
